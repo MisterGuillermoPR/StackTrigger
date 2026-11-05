@@ -1,0 +1,11 @@
+C:\Users\MeMoAdmin\source\B2BParse\src\StackTrigger.Domain\bin\Debug\net9.0\StackTrigger.Domain.deps.json
+C:\Users\MeMoAdmin\source\B2BParse\src\StackTrigger.Domain\bin\Debug\net9.0\StackTrigger.Domain.dll
+C:\Users\MeMoAdmin\source\B2BParse\src\StackTrigger.Domain\bin\Debug\net9.0\StackTrigger.Domain.pdb
+C:\Users\MeMoAdmin\source\B2BParse\src\StackTrigger.Domain\obj\Debug\net9.0\StackTrigger.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\MeMoAdmin\source\B2BParse\src\StackTrigger.Domain\obj\Debug\net9.0\StackTrigger.Domain.AssemblyInfoInputs.cache
+C:\Users\MeMoAdmin\source\B2BParse\src\StackTrigger.Domain\obj\Debug\net9.0\StackTrigger.Domain.AssemblyInfo.cs
+C:\Users\MeMoAdmin\source\B2BParse\src\StackTrigger.Domain\obj\Debug\net9.0\StackTrigger.Domain.csproj.CoreCompileInputs.cache
+C:\Users\MeMoAdmin\source\B2BParse\src\StackTrigger.Domain\obj\Debug\net9.0\StackTrigger.Domain.dll
+C:\Users\MeMoAdmin\source\B2BParse\src\StackTrigger.Domain\obj\Debug\net9.0\refint\StackTrigger.Domain.dll
+C:\Users\MeMoAdmin\source\B2BParse\src\StackTrigger.Domain\obj\Debug\net9.0\StackTrigger.Domain.pdb
+C:\Users\MeMoAdmin\source\B2BParse\src\StackTrigger.Domain\obj\Debug\net9.0\ref\StackTrigger.Domain.dll

@@ -1,0 +1,47 @@
+services:
+  stacktrigger-db:
+    image: postgres:16-alpine
+    container_name: stacktrigger-db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-stacktrigger}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeMeSecurePassword123!}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - stacktrigger_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-stacktrigger}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - stacktrigger-network
+
+  stacktrigger-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stacktrigger-worker
+    restart: unless-stopped
+    depends_on:
+      stacktrigger-db:
+        condition: service_healthy
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=stacktrigger-db;Port=5432;Database=${POSTGRES_DB:-stacktrigger};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-ChangeMeSecurePassword123!}"
+      AtsScraper__TargetUrls__0: "https://remoteok.com/remote-engineer-jobs"
+      WebhookDispatcher__BatchSize: "50"
+    networks:
+      - stacktrigger-network
+
+volumes:
+  stacktrigger_pgdata:
+    driver: local
+
+networks:
+  stacktrigger-network:
+    driver: bridge
+
