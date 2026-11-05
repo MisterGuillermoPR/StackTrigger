@@ -21,6 +21,8 @@ public sealed class IntentSignal
         IEnumerable<string> targetTechnologies,
         string sourceUrl,
         DateTimeOffset dateDetected,
+        DateTimeOffset? sourceDate,
+        int relevanceScore,
         DispatchStatus dispatchStatus)
     {
         Id = id;
@@ -28,6 +30,8 @@ public sealed class IntentSignal
         JobTitle = jobTitle;
         SourceUrl = sourceUrl;
         DateDetected = dateDetected;
+        SourceDate = sourceDate;
+        RelevanceScore = relevanceScore;
         DispatchStatus = dispatchStatus;
         _targetTechnologies = targetTechnologies
             .Where(t => !string.IsNullOrWhiteSpace(t))
@@ -42,6 +46,8 @@ public sealed class IntentSignal
     public IReadOnlyCollection<string> TargetTechnologies => _targetTechnologies.AsReadOnly();
     public string SourceUrl { get; private set; }
     public DateTimeOffset DateDetected { get; private set; }
+    public DateTimeOffset? SourceDate { get; private set; }
+    public int RelevanceScore { get; private set; }
     public DispatchStatus DispatchStatus { get; private set; }
 
     public static IntentSignal Create(
@@ -49,7 +55,9 @@ public sealed class IntentSignal
         string jobTitle,
         IEnumerable<string> targetTechnologies,
         string sourceUrl,
-        DateTimeOffset? dateDetected = null)
+        DateTimeOffset? dateDetected = null,
+        DateTimeOffset? sourceDate = null,
+        int relevanceScore = 0)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(companyName, nameof(companyName));
         ArgumentException.ThrowIfNullOrWhiteSpace(jobTitle, nameof(jobTitle));
@@ -62,6 +70,10 @@ public sealed class IntentSignal
         }
 
         ArgumentNullException.ThrowIfNull(targetTechnologies, nameof(targetTechnologies));
+        if (relevanceScore < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(relevanceScore), "Relevance score cannot be negative.");
+        }
 
         var techList = targetTechnologies.ToList();
         if (techList.Count == 0 || techList.All(string.IsNullOrWhiteSpace))
@@ -76,6 +88,8 @@ public sealed class IntentSignal
             targetTechnologies: techList,
             sourceUrl: parsedUri.ToString(),
             dateDetected: dateDetected ?? DateTimeOffset.UtcNow,
+            sourceDate: sourceDate,
+            relevanceScore: relevanceScore,
             dispatchStatus: DispatchStatus.Pending
         );
     }

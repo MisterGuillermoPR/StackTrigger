@@ -15,19 +15,22 @@ public sealed class EnterpriseAtsScraperTests
     public async Task ScrapeSignalsAsync_ShouldParseGreenhouseJsonApiPristinely()
     {
         // Arrange
-        const string fakeGreenhouseResponse = """
+        var recentSourceDate = DateTimeOffset.UtcNow.ToString("O");
+        var fakeGreenhouseResponse = $$"""
         {
           "jobs": [
             {
               "id": 50123,
               "title": "Principal Cloud Migration Architect",
               "absolute_url": "https://boards.greenhouse.io/cloudflare/jobs/50123",
+              "updated_at": "{{recentSourceDate}}",
               "content": "&lt;p&gt;Leading our massive migration to Azure and implementing SOC2 compliance across core services.&lt;/p&gt;"
             },
             {
               "id": 50124,
               "title": "Executive Assistant",
               "absolute_url": "https://boards.greenhouse.io/cloudflare/jobs/50124",
+              "updated_at": "{{recentSourceDate}}",
               "content": "&lt;p&gt;Calendar management and travel bookings.&lt;/p&gt;"
             }
           ]

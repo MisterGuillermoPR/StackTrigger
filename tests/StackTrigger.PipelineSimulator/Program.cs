@@ -80,10 +80,12 @@ Console.ForegroundColor = ConsoleColor.Yellow;
 Console.WriteLine("\n[STEP 2] Simulating Real ATS Job Posting Ingestion via AtsHtmlScraper...");
 Console.ResetColor();
 
-const string mockAtsHtml = """
+var recentSourceDate = DateTimeOffset.UtcNow.ToString("O");
+var mockAtsHtml = $$"""
     <div class="job-board">
         <article class="job-posting">
             <h2 class="job-title">Senior Enterprise Cloud Architect</h2>
+            <time datetime="{{recentSourceDate}}">Recently posted</time>
             <span class="company-name">HealthStream Solutions</span>
             <a href="https://careers.healthstream.com/jobs/cloud-arch-101">View Details</a>
             <div class="job-description">
@@ -92,6 +94,7 @@ const string mockAtsHtml = """
         </article>
         <article class="job-posting">
             <h2 class="job-title">Director of Information Security</h2>
+            <time datetime="{{recentSourceDate}}">Recently posted</time>
             <span class="company-name">Apex Global Logistics</span>
             <a href="https://apex.com/careers/dir-infosec-202">View Details</a>
             <div class="job-description">

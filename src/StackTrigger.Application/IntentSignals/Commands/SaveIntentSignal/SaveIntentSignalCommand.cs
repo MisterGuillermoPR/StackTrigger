@@ -7,7 +7,9 @@ public sealed record SaveIntentSignalCommand(
     string JobTitle,
     IReadOnlyList<string> TargetTechnologies,
     string SourceUrl,
-    DateTimeOffset? DateDetected = null
+    DateTimeOffset? DateDetected = null,
+    DateTimeOffset? SourceDate = null,
+    int RelevanceScore = 0
 ) : IRequest<SaveIntentSignalResult>;
 
 public sealed record SaveIntentSignalResult(

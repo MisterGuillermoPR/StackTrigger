@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Globalization;
 using AngleSharp;
 using AngleSharp.Html.Dom;
 using Microsoft.Extensions.Logging;
@@ -129,9 +130,17 @@ public sealed partial class AtsHtmlScraper : IIntentScraper
 
         var sourceUrl = ResolveUrl(link, fallbackUrl);
         var companyName = !string.IsNullOrWhiteSpace(company) ? company : ExtractCompanyFromHost(sourceUrl);
+        var sourceDate = ExtractSourceDate(card);
 
-        var matchingKeywords = EvaluateKeywords(description);
-        if (matchingKeywords.Count == 0)
+        if (!IsRecentSourceDate(sourceDate))
+        {
+            _logger.LogDebug("Skipping HTML posting without a recent source date: {SourceUrl}", sourceUrl);
+            return null;
+        }
+
+        var matchingKeywords = EvaluateKeywords($"{title} {description}");
+        var relevanceScore = ScoreRole(title, matchingKeywords);
+        if (relevanceScore == 0)
         {
             return null;
         }
@@ -141,7 +150,9 @@ public sealed partial class AtsHtmlScraper : IIntentScraper
             JobTitle: title,
             TargetTechnologies: matchingKeywords,
             SourceUrl: sourceUrl,
-            DateDetected: DateTimeOffset.UtcNow
+            DateDetected: DateTimeOffset.UtcNow,
+            SourceDate: sourceDate,
+            RelevanceScore: relevanceScore
         );
     }
 
@@ -157,8 +168,17 @@ public sealed partial class AtsHtmlScraper : IIntentScraper
         }
 
         var companyName = !string.IsNullOrWhiteSpace(company) ? company : ExtractCompanyFromHost(sourceUrl);
-        var matchingKeywords = EvaluateKeywords(description);
-        if (matchingKeywords.Count == 0)
+        var sourceDate = ExtractSourceDate(document);
+
+        if (!IsRecentSourceDate(sourceDate))
+        {
+            _logger.LogDebug("Skipping HTML posting without a recent source date: {SourceUrl}", sourceUrl);
+            return null;
+        }
+
+        var matchingKeywords = EvaluateKeywords($"{title} {description}");
+        var relevanceScore = ScoreRole(title, matchingKeywords);
+        if (relevanceScore == 0)
         {
             return null;
         }
@@ -168,8 +188,61 @@ public sealed partial class AtsHtmlScraper : IIntentScraper
             JobTitle: title,
             TargetTechnologies: matchingKeywords,
             SourceUrl: sourceUrl,
-            DateDetected: DateTimeOffset.UtcNow
+            DateDetected: DateTimeOffset.UtcNow,
+            SourceDate: sourceDate,
+            RelevanceScore: relevanceScore
         );
+    }
+
+    private static DateTimeOffset? ExtractSourceDate(AngleSharp.Dom.IParentNode node)
+    {
+        var dateElement = node.QuerySelector(
+            "time[datetime], [data-posted-at], [data-date-posted], [data-created-at], [itemprop='datePosted'], meta[name='date']");
+        if (dateElement is null) return null;
+
+        var value = dateElement.GetAttribute("datetime")
+                    ?? dateElement.GetAttribute("data-posted-at")
+                    ?? dateElement.GetAttribute("data-date-posted")
+                    ?? dateElement.GetAttribute("data-created-at")
+                    ?? dateElement.GetAttribute("content")
+                    ?? dateElement.TextContent;
+
+        return DateTimeOffset.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private bool IsRecentSourceDate(DateTimeOffset? sourceDate)
+    {
+        if (sourceDate is null) return false;
+
+        var now = DateTimeOffset.UtcNow;
+        var maxAgeDays = Math.Max(1, _options.MaxPostingAgeDays);
+        return sourceDate.Value <= now.AddDays(1) && sourceDate.Value >= now.AddDays(-maxAgeDays);
+    }
+
+    private static int ScoreRole(string title, IReadOnlyCollection<string> matchedKeywords)
+    {
+        if (matchedKeywords.Count == 0) return 0;
+
+        string[] relevantRoleTerms =
+        [
+            "cloud", "security", "cyber", "platform", "infrastructure", "devops", "sre",
+            "architect", "engineer", "compliance", "technology", "systems", "network",
+            "site reliability", "information technology", "it ", "it/"
+        ];
+
+        if (!relevantRoleTerms.Any(term => title.Contains(term, StringComparison.OrdinalIgnoreCase)))
+        {
+            return 0;
+        }
+
+        return 2 + matchedKeywords.Count +
+            matchedKeywords.Count(keyword => title.Contains(keyword, StringComparison.OrdinalIgnoreCase)) * 3;
     }
 
     private List<string> EvaluateKeywords(string text)

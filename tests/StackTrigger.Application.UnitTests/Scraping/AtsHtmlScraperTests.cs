@@ -26,7 +26,8 @@ public sealed class AtsHtmlScraperTests
     public async Task ScrapeSignalsAsync_WhenMatchingJobFoundInHtml_ShouldExtractAndReturnCommand()
     {
         // Arrange
-        const string fakeHtml = """
+        var recentDate = DateTimeOffset.UtcNow.ToString("O");
+        var fakeHtml = $$"""
             <!DOCTYPE html>
             <html>
             <head><title>Careers at CyberScale</title></head>
@@ -34,6 +35,7 @@ public sealed class AtsHtmlScraperTests
                 <div class="job-board">
                     <article class="job-posting" data-job-id="101">
                         <h2 class="job-title">Senior Enterprise Cloud Architect</h2>
+                        <time datetime="{{recentDate}}">Recently posted</time>
                         <span class="company-name">CyberScale MSP</span>
                         <a href="https://careers.techcorp.com/jobs/101">View Job</a>
                         <div class="job-description">
@@ -43,6 +45,7 @@ public sealed class AtsHtmlScraperTests
                     </article>
                     <article class="job-posting" data-job-id="102">
                         <h2 class="job-title">Office Operations Assistant</h2>
+                        <time datetime="{{recentDate}}">Recently posted</time>
                         <span class="company-name">CyberScale MSP</span>
                         <a href="https://careers.techcorp.com/jobs/102">View Job</a>
                         <div class="job-description">
@@ -87,11 +90,13 @@ public sealed class AtsHtmlScraperTests
     public async Task ParseHtmlContentAsync_SingleJobDocument_ShouldExtractCorrectly()
     {
         // Arrange
-        const string fakeSingleJobHtml = """
+        var recentDate = DateTimeOffset.UtcNow.ToString("O");
+        var fakeSingleJobHtml = $$"""
             <!DOCTYPE html>
             <html>
             <body>
                 <h1 class="job-title">Lead Platform Security Engineer</h1>
+                <time datetime="{{recentDate}}">Recently posted</time>
                 <div class="company-name">DefendLogix</div>
                 <div class="job-description">
                     Leading our Azure zero-trust rollout and achieving SOC2 certification across all cloud assets.

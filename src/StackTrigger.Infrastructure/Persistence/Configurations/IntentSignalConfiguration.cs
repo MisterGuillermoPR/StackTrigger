@@ -39,6 +39,13 @@ public sealed class IntentSignalConfiguration : IEntityTypeConfiguration<IntentS
         builder.Property(s => s.DateDetected)
             .IsRequired();
 
+        builder.Property(s => s.SourceDate)
+            .IsRequired(false);
+
+        builder.Property(s => s.RelevanceScore)
+            .HasDefaultValue(0)
+            .IsRequired();
+
         builder.Property(s => s.DispatchStatus)
             .HasConversion<string>()
             .HasMaxLength(30)
