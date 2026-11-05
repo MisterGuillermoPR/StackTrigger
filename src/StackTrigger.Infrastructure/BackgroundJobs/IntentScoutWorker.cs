@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using StackTrigger.Application.Common.Interfaces;
+using StackTrigger.Application.IntentSignals.Commands.ProcessPendingSignals;
 
 namespace StackTrigger.Infrastructure.BackgroundJobs;
 
@@ -26,7 +27,7 @@ public sealed class IntentScoutWorker : BackgroundService
     {
         _logger.LogInformation("IntentScoutWorker started. Cycle period: {Period}", _period);
 
-        // Run an immediate pass upon startup
+        // Immediate pass upon startup
         await ExecuteScrapeCycleAsync(stoppingToken);
 
         using var timer = new PeriodicTimer(_period);
@@ -49,16 +50,15 @@ public sealed class IntentScoutWorker : BackgroundService
 
     public async Task ExecuteScrapeCycleAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Starting scrape cycle at {Time}", DateTimeOffset.UtcNow);
+        _logger.LogInformation("Starting scrape and dispatch cycle at {Time}", DateTimeOffset.UtcNow);
 
         try
         {
-            // Worker is a Singleton; MediatR and Scrapers/Repositories are Scoped.
-            // Create an explicit scope to resolve dependencies.
             using var scope = _scopeFactory.CreateScope();
             var scraper = scope.ServiceProvider.GetRequiredService<IIntentScraper>();
             var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
+            // Phase 1: Scrape ATS targets
             var detectedSignals = await scraper.ScrapeSignalsAsync(cancellationToken);
             int totalProcessed = 0;
             int newSaved = 0;
@@ -79,18 +79,26 @@ public sealed class IntentScoutWorker : BackgroundService
             }
 
             _logger.LogInformation(
-                "Completed scrape cycle. Discovered: {Total}, Newly Saved: {Saved}, Skipped Duplicates: {Skipped}",
+                "Completed scrape phase. Discovered: {Total}, Newly Saved: {Saved}, Skipped Duplicates: {Skipped}",
                 totalProcessed,
                 newSaved,
                 totalProcessed - newSaved);
+
+            // Phase 2: Dispatch pending signals to subscribed client webhooks (Slack / Teams)
+            var dispatchResult = await mediator.Send(new ProcessPendingSignalsCommand(), cancellationToken);
+            _logger.LogInformation(
+                "Completed dispatch phase. Processed: {Total}, Successfully Pushed: {Success}, Failed: {Failed}",
+                dispatchResult.TotalProcessed,
+                dispatchResult.SuccessfullyDispatched,
+                dispatchResult.FailedCount);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _logger.LogInformation("Scrape cycle cancelled.");
+            _logger.LogInformation("Scrape/dispatch cycle cancelled.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception during scrape cycle execution.");
+            _logger.LogError(ex, "Unhandled exception during scrape/dispatch cycle execution.");
         }
     }
 }

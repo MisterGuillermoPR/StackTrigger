@@ -33,9 +33,9 @@ public static class DependencyInjection
         services.Configure<AtsScraperOptions>(
             configuration.GetSection(AtsScraperOptions.SectionName));
 
-        // Resilient HTTP Client with exponential backoff retry strategy via Microsoft.Extensions.Http.Resilience
-        services.AddHttpClient<IIntentScraper, AtsHtmlScraper>()
-            .AddResilienceHandler("ats-scraper-pipeline", builder =>
+        // Register HTML Scraper as internal service
+        services.AddHttpClient<AtsHtmlScraper>()
+            .AddResilienceHandler("ats-html-pipeline", builder =>
             {
                 builder.AddRetry(new HttpRetryStrategyOptions
                 {
@@ -44,8 +44,21 @@ public static class DependencyInjection
                     BackoffType = DelayBackoffType.Exponential,
                     UseJitter = true
                 });
-
                 builder.AddTimeout(TimeSpan.FromSeconds(30));
+            });
+
+        // Register Primary Enterprise ATS Scraper (Greenhouse + Lever REST API + HTML Fallback)
+        services.AddHttpClient<IIntentScraper, EnterpriseAtsScraper>()
+            .AddResilienceHandler("ats-api-pipeline", builder =>
+            {
+                builder.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = 3,
+                    Delay = TimeSpan.FromSeconds(1),
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true
+                });
+                builder.AddTimeout(TimeSpan.FromSeconds(25));
             });
 
         // Webhook Delivery Service

@@ -1,0 +1,35 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/dist/
+**/dist-ssr/
+**/.vs/
+**/.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Node & Frontend
+frontend/node_modules/
+frontend/.pnp/
+frontend/.pnp.js
+frontend/dist/
+
+# Test Results & Coverage
+TestResults/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# OS generated
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Environment & Secrets
+.env
+.env*.local
+*.key
+*.pfx
