@@ -42,7 +42,9 @@ public sealed class SaveIntentSignalCommandHandler
             jobTitle: request.JobTitle,
             targetTechnologies: request.TargetTechnologies,
             sourceUrl: request.SourceUrl,
-            dateDetected: request.DateDetected
+            dateDetected: request.DateDetected,
+            sourceDate: request.SourceDate,
+            relevanceScore: request.RelevanceScore
         );
 
         await _repository.AddAsync(signal, cancellationToken);

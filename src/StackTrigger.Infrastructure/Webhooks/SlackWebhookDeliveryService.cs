@@ -77,6 +77,7 @@ public sealed class SlackWebhookDeliveryService : IWebhookDeliveryService
 
     public static object BuildSlackPayload(IntentSignal signal)
     {
+        var sourceDateText = signal.SourceDate?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "Unknown";
         var techBadges = string.Join("  •  ", signal.TargetTechnologies.Select(t => $"`{t}`"));
 
         return new
@@ -127,7 +128,7 @@ public sealed class SlackWebhookDeliveryService : IWebhookDeliveryService
                         new
                         {
                             type = "mrkdwn",
-                            text = $"*Detected at:* <!date^{signal.DateDetected.ToUnixTimeSeconds()}^{{date_num}} {{time_secs}}|{signal.DateDetected:yyyy-MM-dd HH:mm:ss UTC}>  •  *Via:* StackTrigger Autonomous Engine"
+                            text = $"*ATS source timestamp:* {sourceDateText}\n*Detected at:* <!date^{signal.DateDetected.ToUnixTimeSeconds()}^{{date_num}} {{time_secs}}|{signal.DateDetected:yyyy-MM-dd HH:mm:ss UTC}>  •  *Via:* StackTrigger Autonomous Engine"
                         }
                     }
                 },

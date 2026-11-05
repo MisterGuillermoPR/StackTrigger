@@ -69,6 +69,7 @@ foreach (var lead in signals.Take(3))
 {
     Console.WriteLine($" - [{lead.CompanyName}] {lead.JobTitle}");
     Console.WriteLine($"   Tags: {string.Join(", ", lead.TargetTechnologies)}");
+    Console.WriteLine($"   Role relevance: {lead.RelevanceScore} | ATS source date: {lead.SourceDate:yyyy-MM-dd}");
     Console.WriteLine($"   URL:  {lead.SourceUrl}\n");
 }
 

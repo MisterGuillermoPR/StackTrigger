@@ -64,4 +64,7 @@ public sealed class AtsScraperOptions
     ];
 
     public string UserAgent { get; set; } = "StackTriggerScout/2.0 (+https://stacktrigger.com/bot)";
+
+    /// <summary>Maximum age accepted for ATS source timestamps. Signals without source timestamps are excluded.</summary>
+    public int MaxPostingAgeDays { get; set; } = 30;
 }
