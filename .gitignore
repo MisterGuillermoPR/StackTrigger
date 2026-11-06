@@ -29,8 +29,12 @@ Thumbs.db
 ehthumbs.db
 
 # Environment & Secrets
-.env
-.env*.local
+.env*
+!.env.example
+!**/.env.example
 *.key
 *.pfx
 
+
+# Local pilot sample data
+/artifacts/pilot-signals-review.csv
