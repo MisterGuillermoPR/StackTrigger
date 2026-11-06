@@ -1,22 +1,24 @@
-import React, { useState } from 'react';
-const presets = ['Azure Migration', 'AWS', 'SOC2 Compliance', 'CrowdStrike', 'Kubernetes', '.NET 9'];
-export const Onboarding: React.FC = () => {
-  const [webhook, setWebhook] = useState('');
-  const [selected, setSelected] = useState<string[]>(['Azure Migration', 'SOC2 Compliance']);
-  const [status, setStatus] = useState('');
-  const [busy, setBusy] = useState(false);
-  const toggle = (tag: string) => setSelected(current => current.includes(tag) ? current.filter(x => x !== tag) : [...current, tag]);
-  const test = async () => {
-    if (!/^https:\/\/hooks\.slack\.com\/services\//.test(webhook)) { setStatus('Enter a valid Slack Incoming Webhook URL.'); return; }
-    setBusy(true); setStatus('Sending a test message…');
-    try { const res = await fetch(webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'StackTrigger test signal: Azure Platform Engineer · Northstar Health · Sample only' }) }); if (!res.ok) throw new Error('Slack returned an error.'); setStatus('Test sent. Check your Slack channel.'); }
-    catch { setStatus('Could not send the test from this browser. Slack may block browser requests; server-side setup is required.'); }
-    finally { setBusy(false); }
-  };
-  return <div className="min-h-screen bg-[#071018] text-slate-100"><header className="border-b border-white/5"><div className="mx-auto flex h-[76px] max-w-3xl items-center justify-between px-5"><a href="/" className="font-semibold">stack<span className="text-cyan-300">trigger</span></a><a href="/" className="text-sm text-slate-400 hover:text-white">? Back to site</a></div></header><main className="mx-auto max-w-3xl px-5 py-12 sm:py-16"><p className="text-xs font-semibold uppercase tracking-[.2em] text-cyan-300">Client setup</p><h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Connect your signal feed.</h1><p className="mt-3 text-slate-400">Choose the topics you want to see and connect a Slack channel.</p>
-    <div className="mt-9 space-y-6"><section className="rounded-2xl border border-white/10 bg-[#0d1923] p-6"><div className="flex gap-4"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-cyan-300/10 text-sm text-cyan-200">1</span><div className="w-full"><h2 className="font-semibold">Choose your intent topics</h2><p className="mt-1 text-sm text-slate-400">We’ll match incoming roles against these technologies and initiatives.</p><div className="mt-5 flex flex-wrap gap-2">{presets.map(tag=><button key={tag} type="button" onClick={()=>toggle(tag)} aria-pressed={selected.includes(tag)} className={`rounded-full border px-3 py-2 text-sm transition ${selected.includes(tag)?'border-cyan-200/50 bg-cyan-200/10 text-cyan-100':'border-white/10 text-slate-400 hover:border-white/30'}`}>{selected.includes(tag)?'? ': '+ '}{tag}</button>)}</div></div></div></section>
-    <section className="rounded-2xl border border-white/10 bg-[#0d1923] p-6"><div className="flex gap-4"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-cyan-300/10 text-sm text-cyan-200">2</span><div className="w-full"><h2 className="font-semibold">Connect Slack</h2><p className="mt-1 text-sm text-slate-400">Create an Incoming Webhook for the channel where you want signals delivered.</p><label htmlFor="webhook" className="mt-5 block text-xs font-medium text-slate-300">SLACK INCOMING WEBHOOK URL</label><input id="webhook" type="password" autoComplete="off" value={webhook} onChange={e=>setWebhook(e.target.value)} placeholder="https://hooks.slack.com/services/…" className="mt-2 w-full rounded-lg border border-white/10 bg-[#071018] px-4 py-3 text-sm outline-none placeholder:text-slate-600 focus:border-cyan-300/50"/><div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center"><button type="button" onClick={test} disabled={busy} className="rounded-lg border border-white/15 px-4 py-2.5 text-sm font-semibold hover:bg-white/5 disabled:opacity-50">{busy?'Sending…':'Send test lead'}</button><span aria-live="polite" className="text-xs text-slate-400">{status}</span></div></div></div></section>
-    <div className="rounded-xl border border-amber-200/10 bg-amber-200/[.04] p-4 text-xs leading-5 text-amber-100/70">Setup is a preview. Saving subscriptions and testing Slack securely require the StackTrigger API, which is not connected yet. Don’t paste a production webhook here until server-side onboarding is available.</div>
-    <button type="button" disabled className="w-full cursor-not-allowed rounded-xl bg-cyan-300 px-5 py-3.5 font-semibold text-slate-950 opacity-50">Save feed preferences — coming soon</button></div></main></div>;
-};
+ï»¿import React from 'react';
+
+export const Onboarding: React.FC = () => (
+  <div className="min-h-screen bg-[#071018] text-slate-100">
+    <header className="border-b border-white/5">
+      <div className="mx-auto flex h-[76px] max-w-3xl items-center justify-between px-5">
+        <a href="/" className="font-semibold">stack<span className="text-cyan-300">trigger</span></a>
+        <a href="/" className="text-sm text-slate-400 hover:text-white">Back to site</a>
+      </div>
+    </header>
+    <main className="mx-auto max-w-3xl px-5 py-12 sm:py-16">
+      <p className="text-xs font-semibold uppercase tracking-[.2em] text-cyan-300">Guided pilot setup</p>
+      <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Weâ€™ll set up your feed together.</h1>
+      <p className="mt-3 leading-7 text-slate-400">Client setup is currently handled with the StackTrigger team. Weâ€™ll confirm your signal topics, review sample source links, and coordinate a Slack test after agreeing on the pilot.</p>
+      <div className="mt-8 rounded-2xl border border-white/10 bg-[#0d1923] p-6">
+        <h2 className="font-semibold">Keep your Slack webhook private</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400">This page does not collect Slack credentials. Donâ€™t paste a webhook URL into a browser form or email. Weâ€™ll provide a secure setup path before connecting a production channel.</p>
+      </div>
+      <a href="/#contact" className="mt-8 inline-flex rounded-lg bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-cyan-200">Request a guided pilot</a>
+    </main>
+  </div>
+);
+
 export default Onboarding;

@@ -1,102 +1,93 @@
+﻿using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using StackTrigger.Domain.Entities;
 using StackTrigger.Infrastructure.Scraping;
-using StackTrigger.Infrastructure.Webhooks;
 
 Console.ForegroundColor = ConsoleColor.Cyan;
-Console.WriteLine("================================================================================");
-Console.WriteLine("        STACKTRIGGER ENTERPRISE ATS HARVESTER -> LIVE SLACK DISPATCH           ");
-Console.WriteLine("================================================================================");
+Console.WriteLine("==========================================================================");
+Console.WriteLine("           STACKTRIGGER AWS + AZURE HIRING SIGNAL REVIEW                 ");
+Console.WriteLine("                 READ-ONLY HARVEST — NO SLACK DISPATCH                    ");
+Console.WriteLine("==========================================================================");
 Console.ResetColor();
 
-string webhookUrl = args.Length > 0 ? args[0] : string.Empty;
+using var loggerFactory = LoggerFactory.Create(builder =>
+    builder.AddConsole().SetMinimumLevel(LogLevel.Information));
 
-if (string.IsNullOrWhiteSpace(webhookUrl))
-{
-    Console.ForegroundColor = ConsoleColor.Yellow;
-    Console.Write("\nEnter your Slack Incoming Webhook URL: ");
-    Console.ResetColor();
-    webhookUrl = Console.ReadLine()?.Trim() ?? string.Empty;
-}
-
-if (!Uri.TryCreate(webhookUrl, UriKind.Absolute, out var uri) || !uri.Host.Contains("slack.com"))
-{
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.WriteLine("Error: Must provide a valid Slack webhook URL (https://hooks.slack.com/services/...)");
-    Console.ResetColor();
-    return;
-}
-
-using var loggerFactory = LoggerFactory.Create(b => b.AddConsole().SetMinimumLevel(LogLevel.Information));
 var scraperLogger = loggerFactory.CreateLogger<EnterpriseAtsScraper>();
 var htmlLogger = loggerFactory.CreateLogger<AtsHtmlScraper>();
-var webhookLogger = loggerFactory.CreateLogger<SlackWebhookDeliveryService>();
-
 var options = Options.Create(new AtsScraperOptions
 {
-    // Fast test targets: 3 top tech companies currently hiring heavily
+    // This is a small technical-employer sample, not a representative customer market sample.
     GreenhouseCompanies = ["cloudflare", "elastic", "mongodb"],
     LeverCompanies = ["palantir"],
     TargetUrls = [],
-    MonitoredKeywords = ["Azure", "AWS", "GCP", "Kubernetes", "SOC2", "Cloud Migration", "Zero Trust", "Datadog", "Terraform"]
+    MonitoredKeywords = ["AWS", "Azure", "Cloud Migration", "Migrate to Cloud", "Terraform", "Kubernetes"],
+    MaxPostingAgeDays = 30
 });
 
-var httpClient = new HttpClient();
+using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
 var htmlScraper = new AtsHtmlScraper(httpClient, options, htmlLogger);
 var enterpriseScraper = new EnterpriseAtsScraper(httpClient, options, scraperLogger, htmlScraper);
-var webhookService = new SlackWebhookDeliveryService(httpClient, webhookLogger);
+using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
 
-Console.ForegroundColor = ConsoleColor.Yellow;
-Console.WriteLine("\n[1/2] Harvesting Live Enterprise ATS APIs (Cloudflare, Elastic, MongoDB, Palantir)...");
-Console.ResetColor();
+Console.WriteLine("Scanning 3 Greenhouse boards and 1 Lever board; maximum source age: 30 days.");
+var harvested = (await enterpriseScraper.ScrapeSignalsAsync(timeout.Token)).ToList();
 
-var signals = (await enterpriseScraper.ScrapeSignalsAsync(CancellationToken.None)).ToList();
+var signals = harvested
+    .Where(signal => signal.TargetTechnologies.Any(tag =>
+        tag.Equals("AWS", StringComparison.OrdinalIgnoreCase) ||
+        tag.Equals("Azure", StringComparison.OrdinalIgnoreCase)))
+    .ToList();
 
-Console.ForegroundColor = ConsoleColor.Green;
-Console.WriteLine($"\n[+] Successfully harvested {signals.Count} qualified enterprise signals matching intent keywords!");
-Console.ResetColor();
+var awsCount = signals.Count(signal => signal.TargetTechnologies.Contains("AWS", StringComparer.OrdinalIgnoreCase));
+var azureCount = signals.Count(signal => signal.TargetTechnologies.Contains("Azure", StringComparer.OrdinalIgnoreCase));
+Console.WriteLine($"Fresh, role-relevant AWS/Azure signals: {signals.Count} (AWS: {awsCount}, Azure: {azureCount}).");
+Console.WriteLine("AWS/Azure counts can overlap when a posting mentions both.");
+
+var outputDirectory = Path.Combine(Directory.GetCurrentDirectory(), "artifacts");
+Directory.CreateDirectory(outputDirectory);
+var outputPath = Path.Combine(outputDirectory, "pilot-signals-review.csv");
+var csv = new StringBuilder();
+csv.AppendLine("Company,Role,Platform,Other matched terms,ATS source timestamp,Role relevance score,Source URL");
+
+foreach (var signal in signals)
+{
+    var platforms = signal.TargetTechnologies
+        .Where(tag => tag.Equals("AWS", StringComparison.OrdinalIgnoreCase) || tag.Equals("Azure", StringComparison.OrdinalIgnoreCase));
+    var otherTerms = signal.TargetTechnologies
+        .Where(tag => !tag.Equals("AWS", StringComparison.OrdinalIgnoreCase) && !tag.Equals("Azure", StringComparison.OrdinalIgnoreCase));
+
+    csv.AppendLine(string.Join(',', new[]
+    {
+        signal.CompanyName,
+        signal.JobTitle,
+        string.Join("; ", platforms),
+        string.Join("; ", otherTerms),
+        signal.SourceDate?.ToString("O") ?? string.Empty,
+        signal.RelevanceScore.ToString(),
+        signal.SourceUrl
+    }.Select(EscapeCsv)));
+}
+
+await File.WriteAllTextAsync(outputPath, csv.ToString(), Encoding.UTF8, timeout.Token);
+Console.WriteLine($"Review file: {outputPath}");
 
 if (signals.Count == 0)
 {
-    Console.WriteLine("No signals matched criteria right now. Check network or keywords.");
+    Console.WriteLine("No qualifying signals found. The CSV contains headers only; do not infer demand from this run.");
     return;
 }
 
-// Show the top 3 live leads
-Console.WriteLine("\nSample Discovered Live Leads:");
-foreach (var lead in signals.Take(3))
+Console.WriteLine("\nHighest role-relevance examples (review each source before using it as a prospecting lead):");
+foreach (var signal in signals.Take(10))
 {
-    Console.WriteLine($" - [{lead.CompanyName}] {lead.JobTitle}");
-    Console.WriteLine($"   Tags: {string.Join(", ", lead.TargetTechnologies)}");
-    Console.WriteLine($"   Role relevance: {lead.RelevanceScore} | ATS source date: {lead.SourceDate:yyyy-MM-dd}");
-    Console.WriteLine($"   URL:  {lead.SourceUrl}\n");
+    var platforms = signal.TargetTechnologies
+        .Where(tag => tag.Equals("AWS", StringComparison.OrdinalIgnoreCase) || tag.Equals("Azure", StringComparison.OrdinalIgnoreCase));
+    Console.WriteLine($"- [{string.Join("/", platforms)}] {signal.CompanyName} — {signal.JobTitle}");
+    Console.WriteLine($"  ATS source timestamp: {signal.SourceDate:yyyy-MM-dd} | Role relevance: {signal.RelevanceScore}");
+    Console.WriteLine($"  {signal.SourceUrl}");
 }
 
-Console.ForegroundColor = ConsoleColor.Yellow;
-Console.Write("Dispatch the top lead directly to your Slack channel? (y/n): ");
-Console.ResetColor();
-var confirm = Console.ReadLine()?.Trim().ToLowerInvariant();
+Console.WriteLine("\nThese are hiring signals, not evidence that a company wants to buy outside services.");
 
-if (confirm == "y" || confirm == "yes")
-{
-    var topLead = signals.First();
-    var signalEntity = IntentSignal.Create(
-        topLead.CompanyName,
-        topLead.JobTitle,
-        topLead.TargetTechnologies,
-        topLead.SourceUrl,
-        topLead.DateDetected
-    );
-
-    Console.WriteLine($"\nDispatching '{topLead.CompanyName} - {topLead.JobTitle}' to Slack...");
-    var success = await webhookService.DeliverSignalAsync(signalEntity, webhookUrl, CancellationToken.None);
-
-    if (success)
-    {
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("\n================================================================================");
-        Console.WriteLine(" SUCCESS! REAL ENTERPRISE INTENT LEAD PUSHED DIRECTLY TO YOUR SLACK CHANNEL!   ");
-        Console.WriteLine("================================================================================\n");
-    }
-}
+static string EscapeCsv(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
