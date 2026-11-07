@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StackTrigger.LiveSlackTeste
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StackTrigger.LiveHarvester", "tests\StackTrigger.LiveHarvester\StackTrigger.LiveHarvester.csproj", "{4FE0BA38-C098-46C3-9F50-FE89F8D21D01}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StackTrigger.Api", "src\StackTrigger.Api\StackTrigger.Api.csproj", "{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -143,6 +145,18 @@ Global
 		{4FE0BA38-C098-46C3-9F50-FE89F8D21D01}.Release|x64.Build.0 = Release|Any CPU
 		{4FE0BA38-C098-46C3-9F50-FE89F8D21D01}.Release|x86.ActiveCfg = Release|Any CPU
 		{4FE0BA38-C098-46C3-9F50-FE89F8D21D01}.Release|x86.Build.0 = Release|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Debug|x64.Build.0 = Debug|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Debug|x86.Build.0 = Debug|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Release|x64.ActiveCfg = Release|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Release|x64.Build.0 = Release|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Release|x86.ActiveCfg = Release|Any CPU
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -157,5 +171,6 @@ Global
 		{DE82695C-E1F6-4A50-B4A8-9211C3B51D6C} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{247258C0-7F6B-4A5D-81F3-2AA8D7ED89E6} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{4FE0BA38-C098-46C3-9F50-FE89F8D21D01} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{4173A054-9A4E-41E4-9B25-E1F7AC2ED94F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal
