@@ -25,38 +25,34 @@ public sealed class SaveIntentSignalCommandHandler
     {
         ArgumentNullException.ThrowIfNull(request, nameof(request));
 
-        // Check if signal with this source URL already exists to avoid redundant processing/constraint violations
         var exists = await _repository.ExistsWithSourceUrlAsync(request.SourceUrl, cancellationToken);
         if (exists)
         {
-            _logger.LogInformation(
-                "Skipping duplicate intent signal for source URL: {SourceUrl}",
-                request.SourceUrl);
-
+            _logger.LogInformation("Skipping duplicate intent signal for source URL: {SourceUrl}", request.SourceUrl);
             return SaveIntentSignalResult.SkippedDuplicate(request.SourceUrl);
         }
 
-        // Instantiate using the Domain entity static factory method (encapsulates validation)
         var signal = IntentSignal.Create(
             companyName: request.CompanyName,
             jobTitle: request.JobTitle,
             targetTechnologies: request.TargetTechnologies,
             sourceUrl: request.SourceUrl,
             dateDetected: request.DateDetected,
-            sourceDate: request.SourceDate,
-            relevanceScore: request.RelevanceScore
+            salaryRange: request.SalaryRange,
+            decisionMakerTitle: request.DecisionMakerTitle,
+            linkedInSearchUrl: request.LinkedInSearchUrl,
+            outreachIcebreaker: request.OutreachIcebreaker
         );
 
         await _repository.AddAsync(signal, cancellationToken);
         await _repository.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Persisted intent signal {SignalId} for company '{CompanyName}' - detected tech: [{Technologies}]",
+            "Persisted enriched intent signal {SignalId} for '{Company}' - Target DM: {DM}",
             signal.Id,
             signal.CompanyName,
-            string.Join(", ", signal.TargetTechnologies));
+            signal.DecisionMakerTitle);
 
         return SaveIntentSignalResult.Success(signal.Id);
     }
 }
-

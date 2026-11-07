@@ -8,8 +8,10 @@ public sealed record SaveIntentSignalCommand(
     IReadOnlyList<string> TargetTechnologies,
     string SourceUrl,
     DateTimeOffset? DateDetected = null,
-    DateTimeOffset? SourceDate = null,
-    int RelevanceScore = 0
+    string? SalaryRange = null,
+    string? DecisionMakerTitle = null,
+    string? LinkedInSearchUrl = null,
+    string? OutreachIcebreaker = null
 ) : IRequest<SaveIntentSignalResult>;
 
 public sealed record SaveIntentSignalResult(
@@ -24,4 +26,3 @@ public sealed record SaveIntentSignalResult(
     public static SaveIntentSignalResult SkippedDuplicate(string sourceUrl) =>
         new(false, null, $"Signal from '{sourceUrl}' already exists. Skipped duplicate.");
 }
-

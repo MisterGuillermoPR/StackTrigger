@@ -39,17 +39,26 @@ public sealed class IntentSignalConfiguration : IEntityTypeConfiguration<IntentS
         builder.Property(s => s.DateDetected)
             .IsRequired();
 
-        builder.Property(s => s.SourceDate)
-            .IsRequired(false);
-
-        builder.Property(s => s.RelevanceScore)
-            .HasDefaultValue(0)
-            .IsRequired();
-
         builder.Property(s => s.DispatchStatus)
             .HasConversion<string>()
             .HasMaxLength(30)
             .IsRequired();
+
+        builder.Property(s => s.SalaryRange)
+            .HasMaxLength(150)
+            .IsRequired(false);
+
+        builder.Property(s => s.DecisionMakerTitle)
+            .HasMaxLength(200)
+            .IsRequired(false);
+
+        builder.Property(s => s.LinkedInSearchUrl)
+            .HasMaxLength(2048)
+            .IsRequired(false);
+
+        builder.Property(s => s.OutreachIcebreaker)
+            .HasMaxLength(2048)
+            .IsRequired(false);
 
         // Query performance index for dispatcher background worker
         builder.HasIndex(s => s.DispatchStatus)

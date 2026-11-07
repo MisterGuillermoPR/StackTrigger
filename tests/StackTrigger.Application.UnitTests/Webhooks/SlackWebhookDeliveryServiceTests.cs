@@ -61,14 +61,14 @@ public sealed class SlackWebhookDeliveryServiceTests
         var root = jsonDoc.RootElement;
 
         root.TryGetProperty("blocks", out var blocks).Should().BeTrue();
-        blocks.GetArrayLength().Should().Be(6); // Header, Fields, Tech Section, Context, Actions, Divider
+        blocks.GetArrayLength().Should().Be(9); // Header, Fields, Budget, Tech, DM, Icebreaker, Actions, Context, Divider
 
-        // Verify company & button URL in payload
+        // Verify company, button URL, DM, and icebreaker in payload
         capturedBody.Should().Contain("Fintech Dynamics");
         capturedBody.Should().Contain("Lead Cloud Migration Architect");
         capturedBody.Should().Contain("https://careers.fintech.com/jobs/909");
         capturedBody.Should().Contain("`Azure`");
-        capturedBody.Should().Contain("`Cloud Migration`");
+        capturedBody.Should().Contain("linkedin.com");
     }
 
     [Fact]

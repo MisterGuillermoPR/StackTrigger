@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import OnboardingView from './OnboardingView';
 
 export const LandingPage: React.FC = () => {

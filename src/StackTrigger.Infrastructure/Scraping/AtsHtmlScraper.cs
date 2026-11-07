@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using StackTrigger.Application.Common.Interfaces;
 using StackTrigger.Application.IntentSignals.Commands.SaveIntentSignal;
+using StackTrigger.Domain.Entities;
 
 namespace StackTrigger.Infrastructure.Scraping;
 
@@ -145,14 +146,19 @@ public sealed partial class AtsHtmlScraper : IIntentScraper
             return null;
         }
 
+        var decisionMaker = IntentSignal.InferDecisionMakerTitle(title);
+        var linkedInUrl = IntentSignal.GenerateLinkedInSearchUrl(companyName, decisionMaker);
+        var icebreaker = IntentSignal.GenerateOutreachIcebreaker(companyName, title, matchingKeywords);
+
         return new SaveIntentSignalCommand(
             CompanyName: companyName,
             JobTitle: title,
             TargetTechnologies: matchingKeywords,
             SourceUrl: sourceUrl,
             DateDetected: DateTimeOffset.UtcNow,
-            SourceDate: sourceDate,
-            RelevanceScore: relevanceScore
+            DecisionMakerTitle: decisionMaker,
+            LinkedInSearchUrl: linkedInUrl,
+            OutreachIcebreaker: icebreaker
         );
     }
 
@@ -183,14 +189,19 @@ public sealed partial class AtsHtmlScraper : IIntentScraper
             return null;
         }
 
+        var decisionMaker = IntentSignal.InferDecisionMakerTitle(title);
+        var linkedInUrl = IntentSignal.GenerateLinkedInSearchUrl(companyName, decisionMaker);
+        var icebreaker = IntentSignal.GenerateOutreachIcebreaker(companyName, title, matchingKeywords);
+
         return new SaveIntentSignalCommand(
             CompanyName: companyName,
             JobTitle: title,
             TargetTechnologies: matchingKeywords,
             SourceUrl: sourceUrl,
             DateDetected: DateTimeOffset.UtcNow,
-            SourceDate: sourceDate,
-            RelevanceScore: relevanceScore
+            DecisionMakerTitle: decisionMaker,
+            LinkedInSearchUrl: linkedInUrl,
+            OutreachIcebreaker: icebreaker
         );
     }
 

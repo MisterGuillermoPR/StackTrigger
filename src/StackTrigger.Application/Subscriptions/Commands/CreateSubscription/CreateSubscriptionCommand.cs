@@ -13,3 +13,4 @@ public sealed record CreateSubscriptionResult(
     Guid? SubscriptionId,
     string Message
 );
+

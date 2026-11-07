@@ -49,7 +49,7 @@ public sealed class SlackWebhookDeliveryService : IWebhookDeliveryService
             if (response.IsSuccessStatusCode)
             {
                 _logger.LogInformation(
-                    "Successfully dispatched intent signal {SignalId} to Slack webhook for {Company}",
+                    "Successfully dispatched enriched intent signal {SignalId} to Slack webhook for {Company}",
                     signal.Id,
                     signal.CompanyName);
                 return true;
@@ -77,85 +77,117 @@ public sealed class SlackWebhookDeliveryService : IWebhookDeliveryService
 
     public static object BuildSlackPayload(IntentSignal signal)
     {
-        var sourceDateText = signal.SourceDate?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "Unknown";
         var techBadges = string.Join("  •  ", signal.TargetTechnologies.Select(t => $"`{t}`"));
+        var budgetDisplay = !string.IsNullOrWhiteSpace(signal.SalaryRange)
+            ? $"💰 *Budget/Comp:* {signal.SalaryRange}  •  🔥 *Urgency:* Immediate Active Hiring"
+            : "🔥 *Urgency:* Immediate Active Hiring (Budget Approved)";
 
-        return new
+        var decisionMaker = signal.DecisionMakerTitle ?? "VP of Engineering / Head of Infrastructure";
+        var linkedInUrl = signal.LinkedInSearchUrl
+            ?? IntentSignal.GenerateLinkedInSearchUrl(signal.CompanyName, decisionMaker);
+        var icebreaker = signal.OutreachIcebreaker
+            ?? IntentSignal.GenerateOutreachIcebreaker(signal.CompanyName, signal.JobTitle, signal.TargetTechnologies.ToList());
+
+        var blocks = new List<object>
         {
-            blocks = new object[]
+            // Header
+            new
             {
-                new
+                type = "header",
+                text = new
                 {
-                    type = "header",
-                    text = new
+                    type = "plain_text",
+                    text = $"🚨 StackTrigger High-Intent Lead: {signal.CompanyName}",
+                    emoji = true
+                }
+            },
+            // Lead Details
+            new
+            {
+                type = "section",
+                fields = new object[]
+                {
+                    new { type = "mrkdwn", text = $"*Company:*\n*{signal.CompanyName}*" },
+                    new { type = "mrkdwn", text = $"*Target Role:*\n{signal.JobTitle}" }
+                }
+            },
+            // Budget / Urgency
+            new
+            {
+                type = "section",
+                text = new
+                {
+                    type = "mrkdwn",
+                    text = budgetDisplay
+                }
+            },
+            // Tech Triggers
+            new
+            {
+                type = "section",
+                text = new
+                {
+                    type = "mrkdwn",
+                    text = $"*Detected Tech Migration / Stack Triggers:*\n{techBadges}"
+                }
+            },
+            // Decision Maker Prospecting Target
+            new
+            {
+                type = "section",
+                text = new
+                {
+                    type = "mrkdwn",
+                    text = $"🎯 *Target Decision-Maker:*\n`{decisionMaker}`"
+                }
+            },
+            // 1-Click Outreach Pitch Angle
+            new
+            {
+                type = "section",
+                text = new
+                {
+                    type = "mrkdwn",
+                    text = $"💡 *Recommended Cold Outreach Angle:*\n_{icebreaker}_"
+                }
+            },
+            // 1-Click Action Buttons
+            new
+            {
+                type = "actions",
+                elements = new object[]
+                {
+                    new
                     {
-                        type = "plain_text",
-                        text = $"🚨 StackTrigger High-Intent Lead: {signal.CompanyName}",
-                        emoji = true
-                    }
-                },
-                new
-                {
-                    type = "section",
-                    fields = new object[]
+                        type = "button",
+                        text = new { type = "plain_text", text = "View Source ATS Job", emoji = true },
+                        style = "primary",
+                        url = signal.SourceUrl
+                    },
+                    new
                     {
-                        new
-                        {
-                            type = "mrkdwn",
-                            text = $"*Company:*\n{signal.CompanyName}"
-                        },
-                        new
-                        {
-                            type = "mrkdwn",
-                            text = $"*Target Role:*\n{signal.JobTitle}"
-                        }
+                        type = "button",
+                        text = new { type = "plain_text", text = "Find Decision-Maker on LinkedIn ↗", emoji = true },
+                        url = linkedInUrl
                     }
-                },
-                new
+                }
+            },
+            // Metadata Context
+            new
+            {
+                type = "context",
+                elements = new object[]
                 {
-                    type = "section",
-                    text = new
+                    new
                     {
                         type = "mrkdwn",
-                        text = $"*Detected Tech Migration / Stack Signals:*\n{techBadges}"
+                        text = $"*Detected:* <!date^{signal.DateDetected.ToUnixTimeSeconds()}^{{date_num}} {{time_secs}}|{signal.DateDetected:yyyy-MM-dd HH:mm:ss UTC}>  •  *Via:* StackTrigger Intelligence Engine"
                     }
-                },
-                new
-                {
-                    type = "context",
-                    elements = new object[]
-                    {
-                        new
-                        {
-                            type = "mrkdwn",
-                            text = $"*ATS source timestamp:* {sourceDateText}\n*Detected at:* <!date^{signal.DateDetected.ToUnixTimeSeconds()}^{{date_num}} {{time_secs}}|{signal.DateDetected:yyyy-MM-dd HH:mm:ss UTC}>  •  *Via:* StackTrigger Autonomous Engine"
-                        }
-                    }
-                },
-                new
-                {
-                    type = "actions",
-                    elements = new object[]
-                    {
-                        new
-                        {
-                            type = "button",
-                            text = new
-                            {
-                                type = "plain_text",
-                                text = "View Source Job Posting",
-                                emoji = true
-                            },
-                            style = "primary",
-                            url = signal.SourceUrl
-                        }
-                    }
-                },
-                new
-                {
-                    type = "divider"
                 }
-            }
+            },
+            new { type = "divider" }
         };
+
+        return new { blocks };
     }
 }

@@ -178,3 +178,4 @@ export const OnboardingView: React.FC<{ onBack: () => void }> = ({ onBack }) => 
   );
 };
 export default OnboardingView;
+
