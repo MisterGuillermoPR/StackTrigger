@@ -37,6 +37,10 @@ public sealed class ClientSubscriptionTests
     [InlineData("")]
     [InlineData("not-a-url")]
     [InlineData("ftp://invalid.com")]
+    [InlineData("http://insecure-plain-http.com")]
+    [InlineData("https://localhost/internal")]
+    [InlineData("https://127.0.0.1/admin")]
+    [InlineData("https://169.254.169.254/latest/meta-data")]
     public void Create_WithInvalidWebhook_ShouldThrowArgumentException(string? invalidWebhook)
     {
         var act = () => ClientSubscription.Create(ValidCompany, invalidWebhook!, _validKeywords);

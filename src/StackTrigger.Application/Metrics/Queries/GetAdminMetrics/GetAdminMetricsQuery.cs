@@ -32,3 +32,4 @@ public sealed record RecentLeadDto(
     DateTimeOffset DateDetected,
     string? DecisionMakerTitle
 );
+

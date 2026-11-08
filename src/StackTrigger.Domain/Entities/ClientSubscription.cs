@@ -45,9 +45,19 @@ public sealed class ClientSubscription
         ArgumentException.ThrowIfNullOrWhiteSpace(webhookUrl, nameof(webhookUrl));
 
         if (!Uri.TryCreate(webhookUrl, UriKind.Absolute, out var parsedUri) ||
-            (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+            parsedUri.Scheme != Uri.UriSchemeHttps)
         {
-            throw new ArgumentException("Webhook URL must be a valid absolute HTTP or HTTPS URL.", nameof(webhookUrl));
+            throw new ArgumentException("Webhook URL must be a valid, secure HTTPS URL.", nameof(webhookUrl));
+        }
+
+        // SSRF protection: reject loopback, internal IPs, and cloud metadata endpoints
+        if (parsedUri.IsLoopback ||
+            parsedUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+            parsedUri.Host.Equals("169.254.169.254") ||
+            parsedUri.Host.StartsWith("10.", StringComparison.OrdinalIgnoreCase) ||
+            parsedUri.Host.StartsWith("192.168.", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Webhook URL must point to a public endpoint.", nameof(webhookUrl));
         }
 
         ArgumentNullException.ThrowIfNull(targetKeywords, nameof(targetKeywords));
@@ -75,9 +85,18 @@ public sealed class ClientSubscription
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(newWebhookUrl, nameof(newWebhookUrl));
         if (!Uri.TryCreate(newWebhookUrl, UriKind.Absolute, out var parsedUri) ||
-            (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+            parsedUri.Scheme != Uri.UriSchemeHttps)
         {
-            throw new ArgumentException("Webhook URL must be a valid absolute HTTP or HTTPS URL.", nameof(newWebhookUrl));
+            throw new ArgumentException("Webhook URL must be a valid, secure HTTPS URL.", nameof(newWebhookUrl));
+        }
+
+        if (parsedUri.IsLoopback ||
+            parsedUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+            parsedUri.Host.Equals("169.254.169.254") ||
+            parsedUri.Host.StartsWith("10.", StringComparison.OrdinalIgnoreCase) ||
+            parsedUri.Host.StartsWith("192.168.", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Webhook URL must point to a public endpoint.", nameof(newWebhookUrl));
         }
 
         WebhookUrl = parsedUri.ToString();

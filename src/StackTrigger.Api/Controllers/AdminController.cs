@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using StackTrigger.Application.Metrics.Queries.GetAdminMetrics;
 
 namespace StackTrigger.Api.Controllers;
@@ -9,11 +10,16 @@ namespace StackTrigger.Api.Controllers;
 public sealed class AdminController : ControllerBase
 {
     private readonly IMediator _mediator;
-    private const string AdminSecretKey = "st_live_founder_admin_secret_2026";
+    private readonly string _configuredAdminKey;
 
-    public AdminController(IMediator mediator)
+    public AdminController(IMediator mediator, IConfiguration configuration)
     {
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
+        ArgumentNullException.ThrowIfNull(configuration, nameof(configuration));
+
+        _configuredAdminKey = configuration["Admin:SecretKey"]
+            ?? Environment.GetEnvironmentVariable("ST_ADMIN_KEY")
+            ?? "st_live_founder_admin_secret_2026";
     }
 
     [HttpGet("metrics")]
@@ -21,8 +27,7 @@ public sealed class AdminController : ControllerBase
         [FromHeader(Name = "X-Admin-Key")] string? providedKey,
         CancellationToken cancellationToken)
     {
-        // Simple secure header-based authentication for founder access
-        if (string.IsNullOrWhiteSpace(providedKey) || providedKey != AdminSecretKey)
+        if (string.IsNullOrWhiteSpace(providedKey) || providedKey != _configuredAdminKey)
         {
             return Unauthorized(new { error = "Invalid or missing founder admin key." });
         }
@@ -31,3 +36,4 @@ public sealed class AdminController : ControllerBase
         return Ok(metrics);
     }
 }
+

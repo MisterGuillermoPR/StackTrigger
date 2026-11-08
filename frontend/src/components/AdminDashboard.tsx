@@ -94,15 +94,28 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         const data = await response.json();
         setMetrics(data);
         setIsAuthenticated(true);
+      } else if (response.status === 401 || response.status === 403) {
+        setError('Access Denied: Invalid master founder key.');
+        setIsAuthenticated(false);
       } else {
-        // Fallback to demo mode if backend is running separately
-        setMetrics(sampleData);
-        setIsAuthenticated(true);
+        // In local development preview without backend API running
+        if (key === 'st_live_founder_admin_secret_2026') {
+          setMetrics(sampleData);
+          setIsAuthenticated(true);
+        } else {
+          setError('Access Denied: Invalid master founder key.');
+          setIsAuthenticated(false);
+        }
       }
     } catch {
-      // Local development preview fallback
-      setMetrics(sampleData);
-      setIsAuthenticated(true);
+      // Offline fallback: strictly gate check against founder key
+      if (key === 'st_live_founder_admin_secret_2026') {
+        setMetrics(sampleData);
+        setIsAuthenticated(true);
+      } else {
+        setError('Access Denied: Invalid master founder key.');
+        setIsAuthenticated(false);
+      }
     } finally {
       setLoading(false);
     }
@@ -110,8 +123,17 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminKey.trim()) return;
+    if (!adminKey.trim()) {
+      setError('Please enter the founder access key.');
+      return;
+    }
     fetchMetrics(adminKey.trim());
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setAdminKey('');
+    setMetrics(null);
   };
 
   return (
@@ -140,6 +162,14 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               PostgreSQL Connected
             </span>
+            {isAuthenticated && (
+              <button
+                onClick={handleLogout}
+                className="text-xs font-mono text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-rose-900 bg-slate-900 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Sign Out
+              </button>
+            )}
           </div>
         </div>
 
@@ -166,7 +196,6 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
               >
                 {loading ? 'Authenticating...' : 'Unlock Founder Console →'}
               </button>
-              <div className="text-[11px] text-slate-600 text-center font-mono">Default key: st_live_founder_admin_secret_2026</div>
             </form>
           </div>
         ) : (

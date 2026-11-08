@@ -47,7 +47,7 @@ public sealed class GetAdminMetricsQueryHandler
         var subDtos = subscribers.Select(s => new ClientSubscriptionSummaryDto(
             s.Id,
             s.CompanyName,
-            s.WebhookUrl,
+            MaskWebhookUrl(s.WebhookUrl),
             s.TargetKeywords.ToList(),
             s.IsActive
         )).ToList();
@@ -61,5 +61,16 @@ public sealed class GetAdminMetricsQueryHandler
             subDtos,
             recentSignalDtos
         );
+    }
+
+    private static string MaskWebhookUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || url.Length <= 35)
+        {
+            return "https://hooks.slack.com/services/***";
+        }
+
+        // Show the first 35 chars (service base) and redact the secret token
+        return string.Concat(url.AsSpan(0, 35), "...***");
     }
 }
