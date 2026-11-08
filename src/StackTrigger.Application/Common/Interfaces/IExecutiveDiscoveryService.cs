@@ -13,3 +13,4 @@ public interface IExecutiveDiscoveryService
         string roleContext,
         CancellationToken cancellationToken = default);
 }
+

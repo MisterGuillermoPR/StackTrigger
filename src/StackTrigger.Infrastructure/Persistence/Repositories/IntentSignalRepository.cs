@@ -50,6 +50,25 @@ public sealed class IntentSignalRepository : IIntentSignalRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<IntentSignal>> GetRecentSignalsAsync(int limit = 20, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.IntentSignals
+            .OrderByDescending(s => s.DateDetected)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<int> GetCountAsync(DispatchStatus? status = null, CancellationToken cancellationToken = default)
+    {
+        if (status.HasValue)
+        {
+            return await _dbContext.IntentSignals
+                .CountAsync(s => s.DispatchStatus == status.Value, cancellationToken);
+        }
+
+        return await _dbContext.IntentSignals.CountAsync(cancellationToken);
+    }
+
     public async Task AddAsync(IntentSignal intentSignal, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(intentSignal, nameof(intentSignal));

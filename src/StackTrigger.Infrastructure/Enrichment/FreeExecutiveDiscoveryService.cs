@@ -159,3 +159,4 @@ public sealed class FreeExecutiveDiscoveryService : IExecutiveDiscoveryService
         return new DiscoveredExecutive("Hiring Leader (Review on LinkedIn)", titleDisplay, searchUrl);
     }
 }
+

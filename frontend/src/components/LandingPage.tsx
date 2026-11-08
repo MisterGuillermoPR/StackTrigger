@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import OnboardingView from './OnboardingView';
+import AdminDashboard from './AdminDashboard';
 
 export const LandingPage: React.FC = () => {
-  const [view, setView] = useState<'landing' | 'onboarding'>('landing');
+  const [view, setView] = useState<'landing' | 'onboarding' | 'admin'>('landing');
   const [copied, setCopied] = useState(false);
 
   // When live, replace with your actual Stripe Checkout Payment Link
@@ -16,6 +17,10 @@ export const LandingPage: React.FC = () => {
 
   if (view === 'onboarding') {
     return <OnboardingView onBack={() => setView('landing')} />;
+  }
+
+  if (view === 'admin') {
+    return <AdminDashboard onBack={() => setView('landing')} />;
   }
 
   return (
@@ -190,6 +195,7 @@ export const LandingPage: React.FC = () => {
             &copy; {new Date().getFullYear()} StackTrigger Inc. (stacktrigger.com). All rights reserved.
           </div>
           <div className="flex gap-6">
+            <button onClick={() => setView('admin')} className="hover:text-cyan-400 transition-colors">Founder Console</button>
             <a href="#privacy" className="hover:text-slate-400 transition-colors">Privacy</a>
             <a href="#terms" className="hover:text-slate-400 transition-colors">Terms of Service</a>
             <a href="mailto:support@stacktrigger.com" className="hover:text-slate-400 transition-colors">Support</a>

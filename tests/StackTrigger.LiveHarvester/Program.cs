@@ -63,8 +63,8 @@ foreach (var signal in signals)
         signal.JobTitle,
         string.Join("; ", platforms),
         string.Join("; ", otherTerms),
-        signal.SourceDate?.ToString("O") ?? string.Empty,
-        signal.RelevanceScore.ToString(),
+        signal.DateDetected?.ToString("O") ?? string.Empty,
+        "1.0",
         signal.SourceUrl
     }.Select(EscapeCsv)));
 }
@@ -84,7 +84,7 @@ foreach (var signal in signals.Take(10))
     var platforms = signal.TargetTechnologies
         .Where(tag => tag.Equals("AWS", StringComparison.OrdinalIgnoreCase) || tag.Equals("Azure", StringComparison.OrdinalIgnoreCase));
     Console.WriteLine($"- [{string.Join("/", platforms)}] {signal.CompanyName} — {signal.JobTitle}");
-    Console.WriteLine($"  ATS source timestamp: {signal.SourceDate:yyyy-MM-dd} | Role relevance: {signal.RelevanceScore}");
+    Console.WriteLine($"  ATS source timestamp: {signal.DateDetected:yyyy-MM-dd}");
     Console.WriteLine($"  {signal.SourceUrl}");
 }
 
