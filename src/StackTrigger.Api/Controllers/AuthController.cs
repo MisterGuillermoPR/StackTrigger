@@ -10,6 +10,7 @@ public sealed class AuthController : ControllerBase
 {
     private readonly string _adminUser;
     private readonly string _adminPassword;
+    private readonly string _adminPin;
     private readonly string _adminKey;
 
     public AuthController(IConfiguration configuration)
@@ -24,6 +25,10 @@ public sealed class AuthController : ControllerBase
             ?? Environment.GetEnvironmentVariable("ST_ADMIN_PASSWORD")
             ?? "StackTrigger2026!Master";
 
+        _adminPin = configuration["Admin:SecurityPin"]
+            ?? Environment.GetEnvironmentVariable("ST_ADMIN_PIN")
+            ?? "849201";
+
         _adminKey = configuration["Admin:SecretKey"]
             ?? Environment.GetEnvironmentVariable("ST_ADMIN_KEY")
             ?? "st_live_founder_admin_secret_2026";
@@ -34,21 +39,23 @@ public sealed class AuthController : ControllerBase
     {
         if (request is null ||
             string.IsNullOrWhiteSpace(request.Username) ||
-            string.IsNullOrWhiteSpace(request.Password))
+            string.IsNullOrWhiteSpace(request.Password) ||
+            string.IsNullOrWhiteSpace(request.SecurityPin))
         {
-            return BadRequest(new { error = "Username/email and password are required." });
+            return BadRequest(new { error = "Email, master password, and 6-digit security PIN are required." });
         }
 
         var isUserValid = string.Equals(request.Username.Trim(), _adminUser, StringComparison.OrdinalIgnoreCase) ||
                           string.Equals(request.Username.Trim(), "admin", StringComparison.OrdinalIgnoreCase);
 
         var isPassValid = string.Equals(request.Password, _adminPassword, StringComparison.Ordinal);
+        var isPinValid = string.Equals(request.SecurityPin.Trim(), _adminPin, StringComparison.Ordinal);
 
-        if (!isUserValid || !isPassValid)
+        if (!isUserValid || !isPassValid || !isPinValid)
         {
-            // Delay slightly to prevent timing attacks
-            Thread.Sleep(150);
-            return Unauthorized(new { error = "Invalid credentials. Please verify your email and password." });
+            // Delay to prevent automated timing / brute-force attacks
+            Thread.Sleep(200);
+            return Unauthorized(new { error = "Access Denied: Invalid credentials or security PIN." });
         }
 
         var token = GenerateSecureToken(_adminKey);
@@ -57,25 +64,6 @@ public sealed class AuthController : ControllerBase
             Success: true,
             Token: token,
             User: new UserProfile("admin@stacktrigger.com", "Platform Founder & Architect", "SuperAdmin"),
-            ExpiresIn: 86400 * 30 // 30 days
-        ));
-    }
-
-    [HttpPost("sso")]
-    public IActionResult SecureSignOn([FromBody] SsoLoginRequest request)
-    {
-        if (request is null || string.IsNullOrWhiteSpace(request.Provider))
-        {
-            return BadRequest(new { error = "SSO Provider is required." });
-        }
-
-        // Simulates verified enterprise SSO / Passkey validation for authorized @stacktrigger.com accounts
-        var token = GenerateSecureToken(_adminKey);
-
-        return Ok(new AdminLoginResponse(
-            Success: true,
-            Token: token,
-            User: new UserProfile($"founder@{request.Provider}.stacktrigger.com", "Founder (SSO Verified)", "SuperAdmin"),
             ExpiresIn: 86400 * 30
         ));
     }
@@ -89,7 +77,6 @@ public sealed class AuthController : ControllerBase
     }
 }
 
-public sealed record AdminLoginRequest(string Username, string Password, bool RememberMe = false);
-public sealed record SsoLoginRequest(string Provider, string? AuthorizationCode = null);
+public sealed record AdminLoginRequest(string Username, string Password, string SecurityPin, bool RememberMe = false);
 public sealed record UserProfile(string Email, string Name, string Role);
 public sealed record AdminLoginResponse(bool Success, string Token, UserProfile User, int ExpiresIn);
