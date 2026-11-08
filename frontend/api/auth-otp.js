@@ -57,7 +57,7 @@ export default async function handler(req, res) {
 
     if (apiKey && inbox && from) {
       try {
-        const emailResponse = await fetch('https://api.resend.com/emails', {
+        let emailResponse = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -80,13 +80,39 @@ export default async function handler(req, res) {
           })
         });
 
+        // If custom domain is not yet verified in Resend, automatically fallback to Resend's verified test sender
+        if (!emailResponse.ok && from !== 'onboarding@resend.dev') {
+          emailResponse = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              from: 'StackTrigger Security <onboarding@resend.dev>',
+              to: [inbox],
+              subject: `StackTrigger Founder Security Code: ${otp}`,
+              html: `
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; background: #0B0F19; color: #F8FAFC; border-radius: 8px; border: 1px solid #1E293B;">
+                  <h2 style="color: #FFFFFF; margin-top: 0; font-size: 18px;">Founder Console 2FA</h2>
+                  <p style="color: #94A3B8; font-size: 13px; line-height: 1.5;">A login attempt was initiated for the StackTrigger Founder Console.</p>
+                  <div style="background: #0F172A; border: 1px solid #334155; padding: 18px; border-radius: 6px; text-align: center; margin: 24px 0;">
+                    <span style="font-size: 32px; font-weight: bold; font-family: monospace; letter-spacing: 6px; color: #3B82F6;">${otp}</span>
+                  </div>
+                  <p style="color: #64748B; font-size: 11px;">This code expires in 5 minutes. If you did not initiate this request, lock your session immediately.</p>
+                </div>
+              `
+            })
+          });
+        }
+
         if (emailResponse.ok) {
           emailDelivered = true;
           deliveryNote = `Real 2FA code sent to verified inbox: ${maskEmail(inbox)}`;
         } else {
           const errData = await emailResponse.text();
           console.error('Resend delivery failed:', errData);
-          deliveryNote = 'Resend provider returned an error. Check verified domain in Resend dashboard.';
+          deliveryNote = `Resend error: ${errData}`;
         }
       } catch (err) {
         console.error('Resend fetch failed:', err);
