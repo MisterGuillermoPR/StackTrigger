@@ -58,6 +58,17 @@ public sealed class IntentSignalRepository : IIntentSignalRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<IntentSignal>> GetSignalsForPeriodAsync(
+        DateTimeOffset fromDate,
+        DateTimeOffset toDate,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.IntentSignals
+            .Where(s => s.DateDetected >= fromDate && s.DateDetected <= toDate)
+            .OrderByDescending(s => s.DateDetected)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<int> GetCountAsync(DispatchStatus? status = null, CancellationToken cancellationToken = default)
     {
         if (status.HasValue)

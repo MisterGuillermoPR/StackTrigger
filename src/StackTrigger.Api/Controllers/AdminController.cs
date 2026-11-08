@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using StackTrigger.Application.Digests.Commands.SendWeeklyDigests;
 using StackTrigger.Application.Metrics.Queries.GetAdminMetrics;
 
 namespace StackTrigger.Api.Controllers;
@@ -28,25 +29,7 @@ public sealed class AdminController : ControllerBase
         [FromHeader(Name = "Authorization")] string? authHeader,
         CancellationToken cancellationToken)
     {
-        var isAuthorized = false;
-
-        // 1. Direct key match
-        if (!string.IsNullOrWhiteSpace(providedKey) && providedKey == _configuredAdminKey)
-        {
-            isAuthorized = true;
-        }
-
-        // 2. Bearer session token match
-        if (!isAuthorized && !string.IsNullOrWhiteSpace(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            var token = authHeader["Bearer ".Length..].Trim();
-            if (token.StartsWith("st_sess_") && token.EndsWith(_configuredAdminKey[..Math.Min(8, _configuredAdminKey.Length)]))
-            {
-                isAuthorized = true;
-            }
-        }
-
-        if (!isAuthorized)
+        if (!IsAuthorized(providedKey, authHeader))
         {
             return Unauthorized(new { error = "Invalid or expired session. Please sign in again." });
         }
@@ -54,5 +37,48 @@ public sealed class AdminController : ControllerBase
         var metrics = await _mediator.Send(new GetAdminMetricsQuery(), cancellationToken);
         return Ok(metrics);
     }
+
+    [HttpPost("digests/dispatch")]
+    public async Task<IActionResult> DispatchWeeklyDigests(
+        [FromHeader(Name = "X-Admin-Key")] string? providedKey,
+        [FromHeader(Name = "Authorization")] string? authHeader,
+        [FromBody] DispatchDigestRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (!IsAuthorized(providedKey, authHeader))
+        {
+            return Unauthorized(new { error = "Invalid or expired session. Please sign in again." });
+        }
+
+        var command = new SendWeeklyDigestsCommand(
+            request?.TargetSubscriptionId,
+            request?.LookbackDays ?? 7
+        );
+
+        var result = await _mediator.Send(command, cancellationToken);
+        return Ok(result);
+    }
+
+    private bool IsAuthorized(string? providedKey, string? authHeader)
+    {
+        if (!string.IsNullOrWhiteSpace(providedKey) && providedKey == _configuredAdminKey)
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            var token = authHeader["Bearer ".Length..].Trim();
+            if (token.StartsWith("st_sess_") && token.EndsWith(_configuredAdminKey[..Math.Min(8, _configuredAdminKey.Length)]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
+
+public sealed record DispatchDigestRequest(Guid? TargetSubscriptionId = null, int? LookbackDays = null);
+
 

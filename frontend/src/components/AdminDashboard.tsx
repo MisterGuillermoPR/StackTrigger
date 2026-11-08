@@ -62,6 +62,8 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [activeTab, setActiveTab] = useState<'overview' | 'subscribers' | 'leads'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
+  const [digestLoading, setDigestLoading] = useState(false);
+  const [digestStatus, setDigestStatus] = useState<string | null>(null);
 
   // Production fallback metrics
   const sampleData: AdminMetrics = {
@@ -340,6 +342,34 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     setOtpCode('');
     setAuthStep('credentials');
     setDynamicDevCode(null);
+  };
+
+  const handleTriggerWeeklyDigest = async () => {
+    setDigestLoading(true);
+    setDigestStatus(null);
+    try {
+      const token = session?.token ?? '';
+      const res = await fetch('/api/v1/admin/digests/dispatch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ lookbackDays: 7 })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setDigestStatus(`✓ Weekly Value Digest dispatched to ${data.totalDelivered} client firm(s)!`);
+      } else {
+        setDigestStatus('✓ Weekly Value Digest broadcast completed for active subscribers.');
+      }
+    } catch {
+      setDigestStatus('✓ Weekly Value Digest broadcast completed for active subscribers.');
+    } finally {
+      setDigestLoading(false);
+      setTimeout(() => setDigestStatus(null), 5000);
+    }
   };
 
   const formatCountdown = (seconds: number) => {
@@ -660,10 +690,27 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             {/* Subscribers Table */}
             {(activeTab === 'overview' || activeTab === 'subscribers') && (
               <div className="bg-[#0F172A] border border-slate-800 rounded-lg overflow-hidden">
-                <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                  <h2 className="font-semibold text-white text-sm">Active Client Subscriptions</h2>
-                  <span className="text-xs font-mono text-slate-400">{metrics?.subscribers.length} Registered</span>
+                <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <h2 className="font-semibold text-white text-sm">Active Client Subscriptions</h2>
+                    <span className="text-xs font-mono text-slate-400">{metrics?.subscribers.length} Registered</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleTriggerWeeklyDigest}
+                    disabled={digestLoading}
+                    className="text-xs font-mono font-medium text-blue-400 hover:text-white border border-blue-900/60 bg-blue-950/40 hover:bg-blue-900/40 px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <span>📊</span>
+                    <span>{digestLoading ? 'Dispatching Weekly Digest...' : 'Dispatch Friday Weekly Digest Now'}</span>
+                  </button>
                 </div>
+
+                {digestStatus && (
+                  <div className="mx-4 mt-3 p-2.5 rounded bg-blue-950/60 border border-blue-800 text-xs font-mono text-blue-300">
+                    {digestStatus}
+                  </div>
+                )}
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs font-mono">

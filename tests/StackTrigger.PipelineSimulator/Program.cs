@@ -10,6 +10,7 @@ using StackTrigger.Application.Common.Options;
 using StackTrigger.Application.IntentSignals.Commands.ProcessPendingSignals;
 using StackTrigger.Application.IntentSignals.Commands.SaveIntentSignal;
 using StackTrigger.Domain.Entities;
+using StackTrigger.Domain.Models;
 using StackTrigger.Domain.Repositories;
 using StackTrigger.Infrastructure.Persistence;
 using StackTrigger.Infrastructure.Persistence.Repositories;
@@ -180,6 +181,16 @@ sealed class ConsoleLoggingWebhookService : IWebhookDeliveryService
         Console.WriteLine($" - Lead: {signal.CompanyName} ({signal.JobTitle})");
         Console.WriteLine($" - Tags: [{string.Join(", ", signal.TargetTechnologies)}]");
         Console.WriteLine($" - URL:  {signal.SourceUrl}");
+
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> DeliverWeeklyDigestAsync(WeeklyDigestSummary digest, string webhookUrl, CancellationToken cancellationToken = default)
+    {
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine($"\n [WEEKLY DIGEST -> SLACK] Delivering to: {webhookUrl}");
+        Console.WriteLine($" Client: {digest.CompanyName} | Signals: {digest.TotalSignalsDelivered} | Est. Pipeline: {digest.EstimatedPipelineValue:C0}");
+        Console.ResetColor();
 
         return Task.FromResult(true);
     }

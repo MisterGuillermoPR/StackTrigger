@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using StackTrigger.Application.Common.Interfaces;
 using StackTrigger.Domain.Entities;
+using StackTrigger.Domain.Models;
 
 namespace StackTrigger.Infrastructure.Webhooks;
 
@@ -73,6 +74,153 @@ public sealed class SlackWebhookDeliveryService : IWebhookDeliveryService
             _logger.LogError(ex, "Unexpected error dispatching signal {SignalId} to Slack", signal.Id);
             return false;
         }
+    }
+
+    public async Task<bool> DeliverWeeklyDigestAsync(
+        WeeklyDigestSummary digest,
+        string webhookUrl,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(digest, nameof(digest));
+        ArgumentException.ThrowIfNullOrWhiteSpace(webhookUrl, nameof(webhookUrl));
+
+        var payload = BuildWeeklyDigestPayload(digest);
+        var jsonContent = JsonSerializer.Serialize(payload, JsonOptions);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, webhookUrl)
+        {
+            Content = new StringContent(jsonContent, Encoding.UTF8, MediaTypeNames.Application.Json)
+        };
+
+        try
+        {
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation(
+                    "Successfully dispatched Weekly Value Digest to Slack for {Company}",
+                    digest.CompanyName);
+                return true;
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogError(
+                "Slack webhook digest delivery failed for {Company}. Status: {StatusCode}, Body: {Body}",
+                digest.CompanyName,
+                response.StatusCode,
+                errorBody);
+            return false;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("Slack webhook digest dispatch was cancelled for {Company}", digest.CompanyName);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error dispatching Weekly Digest to Slack for {Company}", digest.CompanyName);
+            return false;
+        }
+    }
+
+    public static object BuildWeeklyDigestPayload(WeeklyDigestSummary digest)
+    {
+        var topTechSummary = digest.TopTechnologies.Any()
+            ? string.Join("  •  ", digest.TopTechnologies.Take(5).Select(kv => $"`{kv.Key} ({kv.Value})`"))
+            : "_Broad Enterprise Cloud Stack_";
+
+        var companiesSummary = digest.TopTargetCompanies.Any()
+            ? string.Join(", ", digest.TopTargetCompanies.Take(6).Select(c => $"*{c}*"))
+            : "_Enterprise Accounts Processed_";
+
+        var dateRange = $"{digest.PeriodStart:MMM d} – {digest.PeriodEnd:MMM d, yyyy}";
+
+        var blocks = new List<object>
+        {
+            // Header
+            new
+            {
+                type = "header",
+                text = new
+                {
+                    type = "plain_text",
+                    text = "📊 StackTrigger Weekly Value Digest",
+                    emoji = true
+                }
+            },
+            // Context
+            new
+            {
+                type = "context",
+                elements = new object[]
+                {
+                    new
+                    {
+                        type = "mrkdwn",
+                        text = $"Executive Intent Recap for *{digest.CompanyName}*  •  *{dateRange}*"
+                    }
+                }
+            },
+            new { type = "divider" },
+            // Key metrics
+            new
+            {
+                type = "section",
+                fields = new object[]
+                {
+                    new
+                    {
+                        type = "mrkdwn",
+                        text = $"*🎯 Intent Signals Delivered:*\n`{digest.TotalSignalsDelivered}` verified migration signals"
+                    },
+                    new
+                    {
+                        type = "mrkdwn",
+                        text = $"*💼 Est. Consulting Pipeline Opportunity:*\n`{digest.EstimatedPipelineValue:C0}`"
+                    }
+                }
+            },
+            // Top Technology Migration Drivers
+            new
+            {
+                type = "section",
+                text = new
+                {
+                    type = "mrkdwn",
+                    text = $"*🔥 Top Detected Migration & Compliance Triggers:*\n{topTechSummary}"
+                }
+            },
+            // Key Accounts Ingested
+            new
+            {
+                type = "section",
+                text = new
+                {
+                    type = "mrkdwn",
+                    text = $"*🏢 Key Enterprise Accounts Sourced This Week:*\n{companiesSummary}"
+                }
+            },
+            new { type = "divider" },
+            // Footer Context
+            new
+            {
+                type = "context",
+                elements = new object[]
+                {
+                    new
+                    {
+                        type = "mrkdwn",
+                        text = "⚡ *StackTrigger Autonomous Intent Scout*  •  _Maintaining your sales team's first-mover advantage._"
+                    }
+                }
+            }
+        };
+
+        return new
+        {
+            text = $"📊 StackTrigger Weekly Value Digest: {digest.TotalSignalsDelivered} migration signals delivered this week.",
+            blocks
+        };
     }
 
     public static object BuildSlackPayload(IntentSignal signal)

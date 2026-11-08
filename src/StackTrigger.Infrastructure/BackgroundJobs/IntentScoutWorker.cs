@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using StackTrigger.Application.Common.Interfaces;
+using StackTrigger.Application.Digests.Commands.SendWeeklyDigests;
 using StackTrigger.Application.IntentSignals.Commands.ProcessPendingSignals;
 
 namespace StackTrigger.Infrastructure.BackgroundJobs;
@@ -12,6 +13,7 @@ public sealed class IntentScoutWorker : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<IntentScoutWorker> _logger;
     private readonly TimeSpan _period;
+    private DateTime? _lastWeeklyDigestDate;
 
     public IntentScoutWorker(
         IServiceScopeFactory scopeFactory,
@@ -91,6 +93,17 @@ public sealed class IntentScoutWorker : BackgroundService
                 dispatchResult.TotalProcessed,
                 dispatchResult.SuccessfullyDispatched,
                 dispatchResult.FailedCount);
+
+            // Phase 3: Automated Friday Afternoon Weekly Value Digest Check
+            if (DateTime.UtcNow.DayOfWeek == DayOfWeek.Friday && _lastWeeklyDigestDate?.Date != DateTime.UtcNow.Date)
+            {
+                _logger.LogInformation("Friday detected. Initiating automated Weekly Value Digest dispatch...");
+                var digestResult = await mediator.Send(new SendWeeklyDigestsCommand(), cancellationToken);
+                _lastWeeklyDigestDate = DateTime.UtcNow.Date;
+                _logger.LogInformation(
+                    "Weekly Digest dispatch completed. Delivered to {Count} active client firms.",
+                    digestResult.TotalDelivered);
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

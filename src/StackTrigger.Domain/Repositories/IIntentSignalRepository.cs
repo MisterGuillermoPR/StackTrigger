@@ -11,6 +11,7 @@ public interface IIntentSignalRepository
     Task<IReadOnlyList<IntentSignal>> GetPendingSignalsAsync(int limit = 50, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<IntentSignal>> GetByStatusAsync(DispatchStatus status, int limit = 50, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<IntentSignal>> GetRecentSignalsAsync(int limit = 20, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<IntentSignal>> GetSignalsForPeriodAsync(DateTimeOffset fromDate, DateTimeOffset toDate, CancellationToken cancellationToken = default);
     Task<int> GetCountAsync(DispatchStatus? status = null, CancellationToken cancellationToken = default);
     Task AddAsync(IntentSignal intentSignal, CancellationToken cancellationToken = default);
     Task UpdateAsync(IntentSignal intentSignal, CancellationToken cancellationToken = default);

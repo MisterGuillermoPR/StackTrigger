@@ -4,6 +4,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using StackTrigger.Domain.Entities;
+using StackTrigger.Domain.Models;
 using StackTrigger.Infrastructure.Webhooks;
 
 namespace StackTrigger.Application.UnitTests.Webhooks;
@@ -93,6 +94,56 @@ public sealed class SlackWebhookDeliveryServiceTests
 
         // Assert
         result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DeliverWeeklyDigestAsync_ShouldSendFormattedWeeklyDigestBlockKitPayload()
+    {
+        // Arrange
+        HttpRequestMessage? capturedRequest = null;
+        string? capturedBody = null;
+
+        var fakeHandler = new InspectingHttpMessageHandler(async req =>
+        {
+            capturedRequest = req;
+            capturedBody = await req.Content!.ReadAsStringAsync();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("ok")
+            };
+        });
+
+        var httpClient = new HttpClient(fakeHandler);
+        var deliveryService = new SlackWebhookDeliveryService(httpClient, _loggerMock);
+
+        var digest = new WeeklyDigestSummary(
+            "Apex Cloud MSP",
+            DateTimeOffset.UtcNow.AddDays(-7),
+            DateTimeOffset.UtcNow,
+            18,
+            new Dictionary<string, int> { { "Azure", 12 }, { "SOC2", 6 } },
+            new[] { "Datadog", "Cloudflare" },
+            450000.00m
+        );
+
+        const string targetWebhook = "https://hooks.slack.com/services/T99/B99/K99";
+
+        // Act
+        var result = await deliveryService.DeliverWeeklyDigestAsync(digest, targetWebhook, CancellationToken.None);
+
+        // Assert
+        result.Should().BeTrue();
+        capturedRequest.Should().NotBeNull();
+        capturedRequest!.Method.Should().Be(HttpMethod.Post);
+        capturedRequest.RequestUri.Should().Be(new Uri(targetWebhook));
+
+        capturedBody.Should().NotBeNull();
+        capturedBody.Should().Contain("StackTrigger Weekly Value Digest");
+        capturedBody.Should().Contain("Apex Cloud MSP");
+        capturedBody.Should().Contain("18");
+        capturedBody.Should().Contain("Azure (12)");
+        capturedBody.Should().Contain("Datadog");
+        capturedBody.Should().Contain("$450,000");
     }
 
     private sealed class InspectingHttpMessageHandler : HttpMessageHandler
