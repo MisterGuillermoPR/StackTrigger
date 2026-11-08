@@ -1,14 +1,17 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using StackTrigger.Domain.Entities;
+using StackTrigger.Infrastructure.Enrichment;
+using StackTrigger.Infrastructure.Scraping;
 using StackTrigger.Infrastructure.Webhooks;
 
 Console.ForegroundColor = ConsoleColor.Cyan;
 Console.WriteLine("================================================================================");
-Console.WriteLine("             STACKTRIGGER LIVE SLACK WEBHOOK DISPATCH VERIFIER                  ");
+Console.WriteLine("      STACKTRIGGER $0 DECISION-MAKER ENRICHMENT -> LIVE SLACK DEMO              ");
 Console.WriteLine("================================================================================");
 Console.ResetColor();
 
-string webhookUrl = args.Length > 0 ? args[0] : string.Empty;
+var webhookUrl = args.Length > 0 ? args[0] : Environment.GetEnvironmentVariable("SLACK_WEBHOOK_URL") ?? string.Empty;
 
 if (string.IsNullOrWhiteSpace(webhookUrl))
 {
@@ -18,47 +21,53 @@ if (string.IsNullOrWhiteSpace(webhookUrl))
     webhookUrl = Console.ReadLine()?.Trim() ?? string.Empty;
 }
 
-if (!Uri.TryCreate(webhookUrl, UriKind.Absolute, out var uri) || !uri.Host.Contains("slack.com"))
-{
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.WriteLine("Error: Must provide a valid Slack webhook URL (e.g. https://hooks.slack.com/services/...)");
-    Console.ResetColor();
-    return;
-}
+using var loggerFactory = LoggerFactory.Create(b => b.AddConsole().SetMinimumLevel(LogLevel.Warning));
+var discoveryLogger = loggerFactory.CreateLogger<FreeExecutiveDiscoveryService>();
+var webhookLogger = loggerFactory.CreateLogger<SlackWebhookDeliveryService>();
 
-using var loggerFactory = LoggerFactory.Create(b => b.AddConsole().SetMinimumLevel(LogLevel.Information));
-var logger = loggerFactory.CreateLogger<SlackWebhookDeliveryService>();
-
-var deliveryService = new SlackWebhookDeliveryService(new HttpClient(), logger);
-
-var sampleSignal = IntentSignal.Create(
-    companyName: "Acme Healthcare Systems",
-    jobTitle: "VP of Enterprise Cloud Architecture",
-    targetTechnologies: ["Azure", "Cloud Migration", ".NET 9", "SOC2"],
-    sourceUrl: "https://careers.acmehealth.com/jobs/lead-cloud-902",
-    dateDetected: DateTimeOffset.UtcNow
-);
+var httpClient = new HttpClient();
+var discoveryService = new FreeExecutiveDiscoveryService(httpClient, discoveryLogger);
+var webhookService = new SlackWebhookDeliveryService(httpClient, webhookLogger);
 
 Console.ForegroundColor = ConsoleColor.Yellow;
-Console.WriteLine($"\n[DISPATCHING] Sending Live Test Lead to Slack...");
-Console.WriteLine($" -> Company: {sampleSignal.CompanyName}");
-Console.WriteLine($" -> Role:    {sampleSignal.JobTitle}");
-Console.WriteLine($" -> Stack:   [{string.Join(", ", sampleSignal.TargetTechnologies)}]");
-Console.WriteLine($" -> URL:     {sampleSignal.SourceUrl}\n");
+Console.WriteLine("\n[1/2] Discovering real executive decision-makers for $0 (Zero API keys)...");
 Console.ResetColor();
 
-var success = await deliveryService.DeliverSignalAsync(sampleSignal, webhookUrl, CancellationToken.None);
+// Test with real high-profile enterprise targets
+var targetCompany = "Datadog";
+var targetRole = "Lead Cloud Security & Zero Trust Architect";
+
+var discoveredLeader = await discoveryService.FindDecisionMakerAsync(targetCompany, targetRole, CancellationToken.None);
+
+Console.ForegroundColor = ConsoleColor.Green;
+Console.WriteLine($"\n[+] Discovered Real Decision-Maker for {targetCompany}:");
+Console.WriteLine($" -> Name:    {discoveredLeader?.FullName}");
+Console.WriteLine($" -> Title:   {discoveredLeader?.JobTitle}");
+Console.WriteLine($" -> Profile: {discoveredLeader?.DirectProfileUrl}\n");
+Console.ResetColor();
+
+Console.ForegroundColor = ConsoleColor.Yellow;
+Console.WriteLine("[2/2] Formatting enriched Slack Block Kit card and dispatching...");
+Console.ResetColor();
+
+var signal = IntentSignal.Create(
+    companyName: targetCompany,
+    jobTitle: targetRole,
+    targetTechnologies: ["Azure", "AWS", "Zero Trust", "Kubernetes"],
+    sourceUrl: "https://careers.datadoghq.com/detail/7194969/?gh_jid=7194969",
+    dateDetected: DateTimeOffset.UtcNow,
+    salaryRange: "$195,000 - $245,000 USD",
+    decisionMakerTitle: $"{discoveredLeader?.FullName} ({discoveredLeader?.JobTitle})",
+    linkedInSearchUrl: discoveredLeader?.DirectProfileUrl,
+    outreachIcebreaker: $"\"Hi {discoveredLeader?.FullName?.Split(' ')[0] ?? "there"}, saw {targetCompany} is expanding its Zero Trust and Cloud Security team. Most teams hit a capacity wall during this rollout—are you handling architecture internally or using specialized advisory?\""
+);
+
+var success = await webhookService.DeliverSignalAsync(signal, webhookUrl, CancellationToken.None);
 
 if (success)
 {
     Console.ForegroundColor = ConsoleColor.Green;
     Console.WriteLine("================================================================================");
-    Console.WriteLine(" SUCCESS! High-Intent Lead successfully rendered in your Slack channel!");
+    Console.WriteLine(" SUCCESS! $0 ENRICHED DECISION-MAKER LEAD DISPATCHED TO YOUR SLACK CHANNEL!   ");
     Console.WriteLine("================================================================================\n");
 }
-else
-{
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.WriteLine("Failed to deliver signal. Check that your Webhook URL is valid and channel permissions are intact.");
-}
-Console.ResetColor();

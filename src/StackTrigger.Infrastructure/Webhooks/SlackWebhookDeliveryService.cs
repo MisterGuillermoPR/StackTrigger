@@ -131,27 +131,27 @@ public sealed class SlackWebhookDeliveryService : IWebhookDeliveryService
                     text = $"*Detected Tech Migration / Stack Triggers:*\n{techBadges}"
                 }
             },
-            // Decision Maker Prospecting Target
+            // Exact Decision Maker Target
             new
             {
                 type = "section",
                 text = new
                 {
                     type = "mrkdwn",
-                    text = $"🎯 *Target Decision-Maker:*\n`{decisionMaker}`"
+                    text = $"🎯 *Verified Decision-Maker to Contact:*\n*{decisionMaker}*"
                 }
             },
-            // 1-Click Outreach Pitch Angle
+            // 1-Click Cold Outreach Angle
             new
             {
                 type = "section",
                 text = new
                 {
                     type = "mrkdwn",
-                    text = $"💡 *Recommended Cold Outreach Angle:*\n_{icebreaker}_"
+                    text = $"💡 *Recommended Cold Pitch:*\n_{icebreaker}_"
                 }
             },
-            // 1-Click Action Buttons
+            // Direct 1-Click Action Buttons
             new
             {
                 type = "actions",
@@ -160,14 +160,14 @@ public sealed class SlackWebhookDeliveryService : IWebhookDeliveryService
                     new
                     {
                         type = "button",
-                        text = new { type = "plain_text", text = "View Source ATS Job", emoji = true },
+                        text = new { type = "plain_text", text = "View Source Job Posting", emoji = true },
                         style = "primary",
                         url = signal.SourceUrl
                     },
                     new
                     {
                         type = "button",
-                        text = new { type = "plain_text", text = "Find Decision-Maker on LinkedIn ↗", emoji = true },
+                        text = new { type = "plain_text", text = "Open Direct LinkedIn Profile ↗", emoji = true },
                         url = linkedInUrl
                     }
                 }

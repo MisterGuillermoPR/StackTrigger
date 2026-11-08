@@ -6,6 +6,7 @@ using Polly;
 using StackTrigger.Application.Common.Interfaces;
 using StackTrigger.Domain.Repositories;
 using StackTrigger.Infrastructure.BackgroundJobs;
+using StackTrigger.Infrastructure.Enrichment;
 using StackTrigger.Infrastructure.Persistence;
 using StackTrigger.Infrastructure.Persistence.Repositories;
 using StackTrigger.Infrastructure.Scraping;
@@ -32,6 +33,19 @@ public static class DependencyInjection
         // Scraping Configuration
         services.Configure<AtsScraperOptions>(
             configuration.GetSection(AtsScraperOptions.SectionName));
+
+        // Free $0 Decision-Maker Discovery Service
+        services.AddHttpClient<IExecutiveDiscoveryService, FreeExecutiveDiscoveryService>()
+            .AddResilienceHandler("discovery-pipeline", builder =>
+            {
+                builder.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = 2,
+                    Delay = TimeSpan.FromSeconds(1),
+                    BackoffType = DelayBackoffType.Exponential
+                });
+                builder.AddTimeout(TimeSpan.FromSeconds(15));
+            });
 
         // Register HTML Scraper as internal service
         services.AddHttpClient<AtsHtmlScraper>()
