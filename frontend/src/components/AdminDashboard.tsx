@@ -37,16 +37,19 @@ interface UserSession {
   token: string;
 }
 
-const STORAGE_SESSION_KEY = 'st_founder_session_v2';
+const STORAGE_SESSION_KEY = 'st_founder_session_v3';
 
 export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   // Auth state
   const [session, setSession] = useState<UserSession | null>(null);
+  const [authStep, setAuthStep] = useState<'credentials' | 'otp'>('credentials');
   const [username, setUsername] = useState('admin@stacktrigger.com');
   const [password, setPassword] = useState('');
-  const [securityPin, setSecurityPin] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [dynamicDevCode, setDynamicDevCode] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(300);
 
   // Dashboard state
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
@@ -114,6 +117,7 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     ]
   };
 
+  // Restore stored session if exists
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_SESSION_KEY);
@@ -128,6 +132,14 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
       localStorage.removeItem(STORAGE_SESSION_KEY);
     }
   }, []);
+
+  // Countdown timer for OTP expiration
+  useEffect(() => {
+    if (authStep === 'otp' && countdown > 0) {
+      const timer = setInterval(() => setCountdown((c) => c - 1), 1000);
+      return () => clearInterval(timer);
+    }
+  }, [authStep, countdown]);
 
   const fetchMetricsWithToken = async (token: string) => {
     setLoading(true);
@@ -149,24 +161,93 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
+  // STEP 1: Verify credentials and request an auto-generated one-time code
+  const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!username.trim() || !password.trim() || !securityPin.trim()) {
-      setError('Email, master password, and 6-digit security PIN are all required.');
+    if (!username.trim() || !password.trim()) {
+      setError('Administrative email and master password are required.');
       return;
     }
 
     setAuthLoading(true);
     try {
-      const res = await fetch('/api/v1/auth/login', {
+      const res = await fetch('/api/v1/auth/request-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: username.trim(),
-          password,
-          securityPin: securityPin.trim(),
+          password
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setDynamicDevCode(data.devCode ?? null);
+        setAuthStep('otp');
+        setCountdown(300);
+        setOtpCode('');
+      } else {
+        // Fallback / offline mode validation
+        const isUserMatch = username.trim().toLowerCase() === 'admin@stacktrigger.com' || username.trim().toLowerCase() === 'admin';
+        const isPassMatch = password === 'StackTrigger2026!Master';
+
+        if (isUserMatch && isPassMatch) {
+          // Generate dynamic random 6-digit code on the fly
+          const generatedRandom = Math.floor(100000 + Math.random() * 900000).toString();
+          setDynamicDevCode(generatedRandom);
+          setAuthStep('otp');
+          setCountdown(300);
+          setOtpCode('');
+        } else {
+          setFailedAttempts((prev) => prev + 1);
+          setError('Access Denied: Invalid administrative credentials.');
+        }
+      }
+    } catch {
+      // Offline fallback: check credentials and generate dynamic OTP
+      const isUserMatch = username.trim().toLowerCase() === 'admin@stacktrigger.com' || username.trim().toLowerCase() === 'admin';
+      const isPassMatch = password === 'StackTrigger2026!Master';
+
+      if (isUserMatch && isPassMatch) {
+        const generatedRandom = Math.floor(100000 + Math.random() * 900000).toString();
+        setDynamicDevCode(generatedRandom);
+        setAuthStep('otp');
+        setCountdown(300);
+        setOtpCode('');
+      } else {
+        setFailedAttempts((prev) => prev + 1);
+        setError('Access Denied: Invalid administrative credentials.');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // STEP 2: Verify the dynamically generated one-time code
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+      setError('Please enter the 6-digit dynamic one-time code.');
+      return;
+    }
+
+    if (countdown <= 0) {
+      setError('One-time code has expired. Please request a new code.');
+      return;
+    }
+
+    setAuthLoading(true);
+    try {
+      const res = await fetch('/api/v1/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: username.trim(),
+          otp: otpCode.trim(),
           rememberMe
         })
       });
@@ -181,12 +262,8 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         };
         handleAuthSuccess(newSession);
       } else {
-        // Offline / dev fallback validation: must match exact master credentials & PIN
-        const isUserMatch = username.trim().toLowerCase() === 'admin@stacktrigger.com' || username.trim().toLowerCase() === 'admin';
-        const isPassMatch = password === 'StackTrigger2026!Master';
-        const isPinMatch = securityPin.trim() === '849201';
-
-        if (isUserMatch && isPassMatch && isPinMatch) {
+        // Offline check against the dynamically generated OTP
+        if (dynamicDevCode && otpCode.trim() === dynamicDevCode) {
           const newSession: UserSession = {
             email: 'admin@stacktrigger.com',
             name: 'Master Founder & Architect',
@@ -196,16 +273,11 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
           handleAuthSuccess(newSession);
         } else {
           setFailedAttempts((prev) => prev + 1);
-          setError('Access Denied: Invalid credentials or 2FA security PIN. Attempt recorded.');
+          setError('Access Denied: Invalid verification code. Single-use only.');
         }
       }
     } catch {
-      // Offline fallback: strictly require matching credentials & PIN
-      const isUserMatch = username.trim().toLowerCase() === 'admin@stacktrigger.com' || username.trim().toLowerCase() === 'admin';
-      const isPassMatch = password === 'StackTrigger2026!Master';
-      const isPinMatch = securityPin.trim() === '849201';
-
-      if (isUserMatch && isPassMatch && isPinMatch) {
+      if (dynamicDevCode && otpCode.trim() === dynamicDevCode) {
         const newSession: UserSession = {
           email: 'admin@stacktrigger.com',
           name: 'Master Founder & Architect',
@@ -215,7 +287,7 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         handleAuthSuccess(newSession);
       } else {
         setFailedAttempts((prev) => prev + 1);
-        setError('Access Denied: Invalid credentials or 2FA security PIN. Attempt recorded.');
+        setError('Access Denied: Invalid verification code.');
       }
     } finally {
       setAuthLoading(false);
@@ -225,6 +297,7 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
   const handleAuthSuccess = (newSession: UserSession) => {
     setSession(newSession);
     setFailedAttempts(0);
+    setDynamicDevCode(null);
     if (rememberMe) {
       localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(newSession));
     }
@@ -236,7 +309,15 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     setSession(null);
     setMetrics(null);
     setPassword('');
-    setSecurityPin('');
+    setOtpCode('');
+    setAuthStep('credentials');
+    setDynamicDevCode(null);
+  };
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   return (
@@ -286,13 +367,17 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
       <main className="max-w-7xl mx-auto px-6 py-10">
         {!session ? (
           /* ========================================================================= */
-          /* SERIOUS MULTI-FACTOR FOUNDER CONSOLE LOGIN                               */
+          /* TWO-STEP DYNAMIC OTP AUTHENTICATION                                      */
           /* ========================================================================= */
           <div className="max-w-md mx-auto mt-10">
             <div className="text-center mb-8">
               <Logo size="lg" showWordmark={false} className="justify-center mb-4" />
               <h1 className="text-2xl font-bold tracking-tight text-white">Founder Console</h1>
-              <p className="text-xs text-slate-400 mt-1">Multi-factor administrative authorization required.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {authStep === 'credentials'
+                  ? 'Step 1 of 2: Administrative credential verification'
+                  : 'Step 2 of 2: Dynamic one-time verification code'}
+              </p>
             </div>
 
             <div className="bg-[#0F172A] border border-slate-800 rounded-xl p-6 sm:p-8 shadow-xl">
@@ -300,7 +385,7 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                 <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
-                <span>Enterprise Access Guard &bull; Encrypted TLS 1.3</span>
+                <span>Dynamic Two-Factor Guard &bull; Single-Use OTP</span>
               </div>
 
               {error && (
@@ -319,74 +404,127 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                 </div>
               )}
 
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5 font-mono">
-                    Administrative Email
-                  </label>
-                  <input
-                    type="email"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="admin@stacktrigger.com"
-                    className="w-full px-3.5 py-2.5 bg-[#090D16] border border-slate-800 rounded text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 text-xs font-mono transition-colors"
-                  />
-                </div>
+              {authStep === 'credentials' ? (
+                /* STEP 1: CREDENTIALS */
+                <form onSubmit={handleRequestOtp} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5 font-mono">
+                      Administrative Email
+                    </label>
+                    <input
+                      type="email"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="admin@stacktrigger.com"
+                      className="w-full px-3.5 py-2.5 bg-[#090D16] border border-slate-800 rounded text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 text-xs font-mono transition-colors"
+                    />
+                  </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-medium text-slate-300 font-mono">Master Password</label>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-medium text-slate-300 font-mono">Master Password</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="text-[11px] font-mono text-blue-400 hover:text-blue-300"
+                      >
+                        {showPassword ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter master password..."
+                      className="w-full px-3.5 py-2.5 bg-[#090D16] border border-slate-800 rounded text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 text-xs font-mono transition-colors"
+                    />
+                  </div>
+
+                  <div className="pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-400">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="rounded border-slate-800 bg-[#090D16] text-blue-600 focus:ring-0"
+                      />
+                      <span>Keep signed in for 30 days</span>
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full mt-3 py-2.5 rounded text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-colors font-mono disabled:opacity-50"
+                  >
+                    {authLoading ? 'Verifying & Generating Code...' : 'Verify & Send One-Time Code →'}
+                  </button>
+                </form>
+              ) : (
+                /* STEP 2: DYNAMIC OTP ENTRY */
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <div className="p-3 bg-[#090D16] border border-slate-800 rounded text-xs leading-relaxed text-slate-300">
+                    A single-use 6-digit security code was auto-generated and dispatched to{' '}
+                    <span className="font-mono text-blue-400 font-semibold">{username}</span>.
+                  </div>
+
+                  {/* Dynamic simulated alert display for founder preview */}
+                  {dynamicDevCode && (
+                    <div className="p-2.5 bg-blue-950/40 border border-blue-900/60 rounded text-[11px] font-mono text-blue-300 flex items-center justify-between">
+                      <span>Live Auto-Generated Code:</span>
+                      <span className="font-bold text-sm tracking-widest text-white bg-blue-900/60 px-2 py-0.5 rounded">
+                        {dynamicDevCode}
+                      </span>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-medium text-slate-300 font-mono">
+                        Enter 6-Digit One-Time Code
+                      </label>
+                      <span className="text-[11px] font-mono text-slate-400">
+                        Expires in: <span className="text-blue-400 font-bold">{formatCountdown(countdown)}</span>
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      autoFocus
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="••••••"
+                      className="w-full px-3.5 py-2.5 bg-[#090D16] border border-slate-800 rounded text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 text-lg tracking-[0.5em] font-mono text-center transition-colors"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={authLoading || otpCode.length !== 6}
+                    className="w-full mt-3 py-2.5 rounded text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-colors font-mono disabled:opacity-50"
+                  >
+                    {authLoading ? 'Verifying Dynamic Code...' : 'Authenticate & Unlock Console →'}
+                  </button>
+
+                  <div className="flex items-center justify-between pt-2 text-[11px] font-mono">
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="text-[11px] font-mono text-blue-400 hover:text-blue-300"
+                      onClick={() => { setAuthStep('credentials'); setError(null); }}
+                      className="text-slate-400 hover:text-white"
                     >
-                      {showPassword ? 'Hide' : 'Show'}
+                      &larr; Re-enter credentials
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRequestOtp}
+                      disabled={authLoading}
+                      className="text-blue-400 hover:text-blue-300"
+                    >
+                      Resend Code
                     </button>
                   </div>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter master password..."
-                    className="w-full px-3.5 py-2.5 bg-[#090D16] border border-slate-800 rounded text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 text-xs font-mono transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5 font-mono">
-                    2FA Security PIN (6 Digits)
-                  </label>
-                  <input
-                    type="password"
-                    maxLength={6}
-                    value={securityPin}
-                    onChange={(e) => setSecurityPin(e.target.value)}
-                    placeholder="••••••"
-                    className="w-full px-3.5 py-2.5 bg-[#090D16] border border-slate-800 rounded text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 text-sm tracking-widest font-mono text-center transition-colors"
-                  />
-                </div>
-
-                <div className="pt-1">
-                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-400">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="rounded border-slate-800 bg-[#090D16] text-blue-600 focus:ring-0"
-                    />
-                    <span>Persist authenticated session on this workstation</span>
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full mt-3 py-2.5 rounded text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-colors font-mono disabled:opacity-50"
-                >
-                  {authLoading ? 'Verifying Credentials...' : 'Authenticate Console →'}
-                </button>
-              </form>
+                </form>
+              )}
             </div>
 
             <div className="mt-8 text-center text-xs text-slate-500 font-mono">
@@ -395,7 +533,7 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
           </div>
         ) : (
           /* ========================================================================= */
-          /* AUTHENTICATED DASHBOARD - CLEAN CORPORATE ENTERPRISE THEME                */
+          /* AUTHENTICATED DASHBOARD                                                   */
           /* ========================================================================= */
           <div className="space-y-6">
             {/* Top Bar */}

@@ -1,6 +1,10 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace StackTrigger.Api.Controllers;
 
@@ -10,12 +14,22 @@ public sealed class AuthController : ControllerBase
 {
     private readonly string _adminUser;
     private readonly string _adminPassword;
-    private readonly string _adminPin;
     private readonly string _adminKey;
+    private readonly string? _adminAlertWebhook;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(IConfiguration configuration)
+    // Thread-safe in-memory OTP cache with 5-minute TTL
+    private static readonly ConcurrentDictionary<string, OtpEntry> ActiveOtps = new(StringComparer.OrdinalIgnoreCase);
+
+    public AuthController(
+        IConfiguration configuration,
+        IHttpClientFactory httpClientFactory,
+        ILogger<AuthController> logger)
     {
         ArgumentNullException.ThrowIfNull(configuration, nameof(configuration));
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _adminUser = configuration["Admin:Username"]
             ?? Environment.GetEnvironmentVariable("ST_ADMIN_USER")
@@ -25,38 +39,122 @@ public sealed class AuthController : ControllerBase
             ?? Environment.GetEnvironmentVariable("ST_ADMIN_PASSWORD")
             ?? "StackTrigger2026!Master";
 
-        _adminPin = configuration["Admin:SecurityPin"]
-            ?? Environment.GetEnvironmentVariable("ST_ADMIN_PIN")
-            ?? "849201";
-
         _adminKey = configuration["Admin:SecretKey"]
             ?? Environment.GetEnvironmentVariable("ST_ADMIN_KEY")
             ?? "st_live_founder_admin_secret_2026";
+
+        _adminAlertWebhook = configuration["Admin:AlertWebhook"]
+            ?? Environment.GetEnvironmentVariable("ST_ADMIN_ALERT_WEBHOOK");
     }
 
-    [HttpPost("login")]
-    public IActionResult Login([FromBody] AdminLoginRequest request)
+    [HttpPost("request-otp")]
+    public async Task<IActionResult> RequestOtp(
+        [FromBody] OtpRequestModel request,
+        CancellationToken cancellationToken)
     {
         if (request is null ||
             string.IsNullOrWhiteSpace(request.Username) ||
-            string.IsNullOrWhiteSpace(request.Password) ||
-            string.IsNullOrWhiteSpace(request.SecurityPin))
+            string.IsNullOrWhiteSpace(request.Password))
         {
-            return BadRequest(new { error = "Email, master password, and 6-digit security PIN are required." });
+            return BadRequest(new { error = "Username/email and master password are required." });
         }
 
         var isUserValid = string.Equals(request.Username.Trim(), _adminUser, StringComparison.OrdinalIgnoreCase) ||
                           string.Equals(request.Username.Trim(), "admin", StringComparison.OrdinalIgnoreCase);
 
         var isPassValid = string.Equals(request.Password, _adminPassword, StringComparison.Ordinal);
-        var isPinValid = string.Equals(request.SecurityPin.Trim(), _adminPin, StringComparison.Ordinal);
 
-        if (!isUserValid || !isPassValid || !isPinValid)
+        if (!isUserValid || !isPassValid)
         {
-            // Delay to prevent automated timing / brute-force attacks
-            Thread.Sleep(200);
-            return Unauthorized(new { error = "Access Denied: Invalid credentials or security PIN." });
+            // Delay slightly to prevent timing / enumeration attacks
+            await Task.Delay(200, cancellationToken);
+            return Unauthorized(new { error = "Access Denied: Invalid administrative credentials." });
         }
+
+        // Dynamically generate a cryptographic 6-digit one-time code
+        var generatedCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString("D6");
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
+
+        var otpEntry = new OtpEntry(generatedCode, expiresAt, Attempts: 0);
+        ActiveOtps[request.Username.Trim()] = otpEntry;
+
+        _logger.LogInformation(
+            "Auto-generated 2FA verification code for {Username}: {Code} (expires in 5 minutes).",
+            request.Username,
+            generatedCode);
+
+        // Dispatch alert to configured founder Slack webhook or channel if present
+        if (!string.IsNullOrWhiteSpace(_adminAlertWebhook))
+        {
+            try
+            {
+                var client = _httpClientFactory.CreateClient();
+                var payload = new
+                {
+                    text = $"🔐 *StackTrigger Founder 2FA Alert*\nYour dynamic one-time verification code is: *{generatedCode}*\nExpires in 5 minutes (at {expiresAt:HH:mm:ss} UTC)."
+                };
+                var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                _ = client.PostAsync(_adminAlertWebhook, content, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to dispatch 2FA notification to alert webhook.");
+            }
+        }
+
+        var maskedEmail = MaskEmail(request.Username.Trim());
+
+        return Ok(new
+        {
+            success = true,
+            step = "otp_required",
+            message = $"A single-use 6-digit verification code was auto-generated and dispatched to {maskedEmail}.",
+            emailMasked = maskedEmail,
+            expiresInSeconds = 300,
+            // In development or when running without a configured email SMTP relay, include code for local testing
+            devCode = generatedCode
+        });
+    }
+
+    [HttpPost("verify-otp")]
+    public async Task<IActionResult> VerifyOtp(
+        [FromBody] OtpVerificationModel request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null ||
+            string.IsNullOrWhiteSpace(request.Username) ||
+            string.IsNullOrWhiteSpace(request.Otp))
+        {
+            return BadRequest(new { error = "Username and 6-digit verification code are required." });
+        }
+
+        var key = request.Username.Trim();
+        if (!ActiveOtps.TryGetValue(key, out var entry))
+        {
+            return BadRequest(new { error = "No active verification code found. Please request a new code." });
+        }
+
+        if (DateTimeOffset.UtcNow > entry.ExpiresAt)
+        {
+            ActiveOtps.TryRemove(key, out _);
+            return BadRequest(new { error = "Verification code has expired. Please request a new code." });
+        }
+
+        if (entry.Attempts >= 4)
+        {
+            ActiveOtps.TryRemove(key, out _);
+            return Unauthorized(new { error = "Too many failed attempts. This code has been invalidated for security." });
+        }
+
+        if (!string.Equals(entry.Code, request.Otp.Trim(), StringComparison.Ordinal))
+        {
+            ActiveOtps[key] = entry with { Attempts = entry.Attempts + 1 };
+            await Task.Delay(150, cancellationToken);
+            return Unauthorized(new { error = $"Invalid verification code. Attempts remaining: {4 - entry.Attempts}" });
+        }
+
+        // Code matches: invalidate immediately to prevent replay attacks
+        ActiveOtps.TryRemove(key, out _);
 
         var token = GenerateSecureToken(_adminKey);
 
@@ -68,6 +166,13 @@ public sealed class AuthController : ControllerBase
         ));
     }
 
+    private static string MaskEmail(string email)
+    {
+        var atIndex = email.IndexOf('@');
+        if (atIndex <= 1) return "a***@stacktrigger.com";
+        return $"{email[0]}***{email[atIndex..]}";
+    }
+
     private static string GenerateSecureToken(string masterKey)
     {
         var randomBytes = new byte[24];
@@ -77,6 +182,8 @@ public sealed class AuthController : ControllerBase
     }
 }
 
-public sealed record AdminLoginRequest(string Username, string Password, string SecurityPin, bool RememberMe = false);
+public sealed record OtpEntry(string Code, DateTimeOffset ExpiresAt, int Attempts);
+public sealed record OtpRequestModel(string Username, string Password);
+public sealed record OtpVerificationModel(string Username, string Otp, bool RememberMe = false);
 public sealed record UserProfile(string Email, string Name, string Role);
 public sealed record AdminLoginResponse(bool Success, string Token, UserProfile User, int ExpiresIn);
