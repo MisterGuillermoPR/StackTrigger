@@ -49,6 +49,9 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [dynamicDevCode, setDynamicDevCode] = useState<string | null>(null);
+  const [stateToken, setStateToken] = useState<string | null>(null);
+  const [inboxMasked, setInboxMasked] = useState<string>('authorized founder email');
+  const [emailDelivered, setEmailDelivered] = useState<boolean>(false);
   const [countdown, setCountdown] = useState(300);
 
   // Dashboard state
@@ -173,28 +176,42 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
 
     setAuthLoading(true);
     try {
-      const res = await fetch('/api/v1/auth/request-otp', {
+      // 1. Try Vercel Serverless Resend Endpoint first
+      let res = await fetch('/api/auth-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: username.trim(),
+          action: 'request',
           password
         })
       });
 
+      // 2. If 404 (local Vite dev without Vercel CLI), fallback to .NET API
+      if (!res.ok && res.status === 404) {
+        res = await fetch('/api/v1/auth/request-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: username.trim(),
+            password
+          })
+        });
+      }
+
       if (res.ok) {
         const data = await res.json();
         setDynamicDevCode(data.devCode ?? null);
+        setStateToken(data.stateToken ?? null);
+        setInboxMasked(data.inboxMasked ?? 'your inbox');
+        setEmailDelivered(data.emailDelivered === true);
         setAuthStep('otp');
         setCountdown(300);
         setOtpCode('');
       } else {
-        // Fallback / offline mode validation
         const isUserMatch = username.trim().toLowerCase() === 'admin@stacktrigger.com' || username.trim().toLowerCase() === 'admin';
         const isPassMatch = password === 'StackTrigger2026!Master';
 
         if (isUserMatch && isPassMatch) {
-          // Generate dynamic random 6-digit code on the fly
           const generatedRandom = Math.floor(100000 + Math.random() * 900000).toString();
           setDynamicDevCode(generatedRandom);
           setAuthStep('otp');
@@ -206,7 +223,6 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         }
       }
     } catch {
-      // Offline fallback: check credentials and generate dynamic OTP
       const isUserMatch = username.trim().toLowerCase() === 'admin@stacktrigger.com' || username.trim().toLowerCase() === 'admin';
       const isPassMatch = password === 'StackTrigger2026!Master';
 
@@ -242,15 +258,28 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
 
     setAuthLoading(true);
     try {
-      const res = await fetch('/api/v1/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: username.trim(),
-          otp: otpCode.trim(),
-          rememberMe
-        })
-      });
+      let res: Response;
+      if (stateToken) {
+        res = await fetch('/api/auth-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'verify',
+            otp: otpCode.trim(),
+            stateToken
+          })
+        });
+      } else {
+        res = await fetch('/api/v1/auth/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: username.trim(),
+            otp: otpCode.trim(),
+            rememberMe
+          })
+        });
+      }
 
       if (res.ok) {
         const data = await res.json();
@@ -262,7 +291,6 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         };
         handleAuthSuccess(newSession);
       } else {
-        // Offline check against the dynamically generated OTP
         if (dynamicDevCode && otpCode.trim() === dynamicDevCode) {
           const newSession: UserSession = {
             email: 'admin@stacktrigger.com',
@@ -463,15 +491,23 @@ export const AdminDashboard: React.FC<{ onBack: () => void }> = ({ onBack }) => 
               ) : (
                 /* STEP 2: DYNAMIC OTP ENTRY */
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
-                  <div className="p-3 bg-[#090D16] border border-slate-800 rounded text-xs leading-relaxed text-slate-300">
-                    A single-use 6-digit security code was auto-generated and dispatched to{' '}
-                    <span className="font-mono text-blue-400 font-semibold">{username}</span>.
-                  </div>
+                  {emailDelivered ? (
+                    <div className="p-3 bg-emerald-950/40 border border-emerald-900/60 rounded text-xs leading-relaxed text-emerald-300">
+                      <span className="font-semibold block mb-0.5">✓ Real Security Code Dispatched</span>
+                      A single-use 6-digit verification code was just sent to{' '}
+                      <span className="font-mono text-white font-bold">{inboxMasked}</span> via Resend. Please check your inbox (and spam folder).
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-[#090D16] border border-slate-800 rounded text-xs leading-relaxed text-slate-300">
+                      A single-use 6-digit security code was auto-generated for{' '}
+                      <span className="font-mono text-blue-400 font-semibold">{username}</span>.
+                    </div>
+                  )}
 
-                  {/* Dynamic simulated alert display for founder preview */}
-                  {dynamicDevCode && (
+                  {/* Fallback development pill only if email delivery is unavailable */}
+                  {!emailDelivered && dynamicDevCode && (
                     <div className="p-2.5 bg-blue-950/40 border border-blue-900/60 rounded text-[11px] font-mono text-blue-300 flex items-center justify-between">
-                      <span>Live Auto-Generated Code:</span>
+                      <span>Offline/Dev Mode Code:</span>
                       <span className="font-bold text-sm tracking-widest text-white bg-blue-900/60 px-2 py-0.5 rounded">
                         {dynamicDevCode}
                       </span>
