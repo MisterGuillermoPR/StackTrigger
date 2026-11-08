@@ -10,6 +10,7 @@ using StackTrigger.Infrastructure.Enrichment;
 using StackTrigger.Infrastructure.Persistence;
 using StackTrigger.Infrastructure.Persistence.Repositories;
 using StackTrigger.Infrastructure.Scraping;
+using StackTrigger.Infrastructure.Notifications;
 using StackTrigger.Infrastructure.Webhooks;
 
 namespace StackTrigger.Infrastructure;
@@ -89,6 +90,9 @@ public static class DependencyInjection
 
                 builder.AddTimeout(TimeSpan.FromSeconds(15));
             });
+
+        // Webhook & Notification Services
+        services.AddScoped<INotificationDeliveryService, NotificationDeliveryService>();
 
         // Background worker
         services.AddHostedService<IntentScoutWorker>();

@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using StackTrigger.Application.Common.Interfaces;
 
 namespace StackTrigger.Api.Controllers;
 
@@ -16,6 +17,7 @@ public sealed class AuthController : ControllerBase
     private readonly string _adminPassword;
     private readonly string _adminKey;
     private readonly string? _adminAlertWebhook;
+    private readonly INotificationDeliveryService _notificationService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<AuthController> _logger;
 
@@ -24,10 +26,12 @@ public sealed class AuthController : ControllerBase
 
     public AuthController(
         IConfiguration configuration,
+        INotificationDeliveryService notificationService,
         IHttpClientFactory httpClientFactory,
         ILogger<AuthController> logger)
     {
         ArgumentNullException.ThrowIfNull(configuration, nameof(configuration));
+        _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -83,7 +87,10 @@ public sealed class AuthController : ControllerBase
             request.Username,
             generatedCode);
 
-        // Dispatch alert to configured founder Slack webhook or channel if present
+        // 1. Dispatch real Email to the founder's inbox (via Resend or SMTP)
+        var emailSent = await _notificationService.SendSecurityCodeEmailAsync(request.Username.Trim(), generatedCode, cancellationToken);
+
+        // 2. Dispatch alert to configured founder Slack webhook or channel if present
         if (!string.IsNullOrWhiteSpace(_adminAlertWebhook))
         {
             try
