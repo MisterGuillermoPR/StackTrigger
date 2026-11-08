@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Logo from './Logo';
 
 const PRESET_KEYWORDS = [
   'Azure',
@@ -86,13 +87,11 @@ export const OnboardingView: React.FC<{ onBack: () => void }> = ({ onBack }) => 
 
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-emerald-400 flex items-center justify-center font-black text-slate-950 text-xl tracking-tighter">
-            ST
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">Connect Your Slack Feed</h2>
-            <p className="text-xs text-slate-400">Step 2 of 2: Set up automated high-intent lead delivery</p>
-          </div>
+          <Logo size="md" />
+        </div>
+        <div className="mb-6">
+          <h2 className="text-xl font-bold text-white">Connect Your Slack Feed</h2>
+          <p className="text-xs text-slate-400">Step 2 of 2: Set up automated high-intent lead delivery</p>
         </div>
 
         {status && (

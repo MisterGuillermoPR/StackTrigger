@@ -25,11 +25,30 @@ public sealed class AdminController : ControllerBase
     [HttpGet("metrics")]
     public async Task<IActionResult> GetMetrics(
         [FromHeader(Name = "X-Admin-Key")] string? providedKey,
+        [FromHeader(Name = "Authorization")] string? authHeader,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(providedKey) || providedKey != _configuredAdminKey)
+        var isAuthorized = false;
+
+        // 1. Direct key match
+        if (!string.IsNullOrWhiteSpace(providedKey) && providedKey == _configuredAdminKey)
         {
-            return Unauthorized(new { error = "Invalid or missing founder admin key." });
+            isAuthorized = true;
+        }
+
+        // 2. Bearer session token match
+        if (!isAuthorized && !string.IsNullOrWhiteSpace(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            var token = authHeader["Bearer ".Length..].Trim();
+            if (token.StartsWith("st_sess_") && token.EndsWith(_configuredAdminKey[..Math.Min(8, _configuredAdminKey.Length)]))
+            {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized)
+        {
+            return Unauthorized(new { error = "Invalid or expired session. Please sign in again." });
         }
 
         var metrics = await _mediator.Send(new GetAdminMetricsQuery(), cancellationToken);
